@@ -2,50 +2,106 @@
 
 VARUNA is an evidence-first cybersecurity analysis console for graph-guided code reasoning, timing side-channel testing, protocol fuzzing, patch review, and security re-verification.
 
-## Run & Operate
+The console is designed to help security operators register analysis targets, start automated/guided analysis runs, inspect security pipeline progress, review evidence-backed findings, execute side-channel/protocol fuzzing campaigns, review code patches, and compile detailed PDF/HTML reports.
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+---
 
-## Stack
+## 🚀 Key Features
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+*   **Graph-Guided Code Reasoning**: Connects abstract syntax tree (AST) code representations with control-flow graphs for precise vulnerability analysis.
+*   **Timing Side-Channel testing**: Supports Transient Execution and TVLA (Test Vector Leakage Assessment) testing workspace.
+*   **Protocol Fuzzing Campaigns**: Provides structured fuzzing dashboards to analyze state machine violations and crashes.
+*   **Patch Review & Verification**: Displays differential patch analysis along with automated triggers to re-verify vulnerabilities.
+*   **Comprehensive Reporting**: Compiles evidence, metrics, and findings into structured reports for security audits.
 
-## Where things live
+---
 
-- `artifacts/varuna-console` — React/Vite operator console with the persistent dashboard shell and workflow routes.
-- `artifacts/api-server/src/routes/varuna.ts` — prototype VARUNA API surface with clearly bounded demo data and queueable workflow mutations.
-- `lib/api-spec/openapi.yaml` — source of truth for the typed overview, targets, runs, findings, timing, protocol, patch, verification, and report contracts.
-- `attached_assets/image_1786939138391.png` — visual direction reference for the console shell and hierarchy.
+## 🛠️ Technology Stack
 
-## Architecture decisions
+VARUNA is built as a multi-package monorepo using **pnpm workspaces**:
 
-- The first prototype uses a typed server contract and modular adapters so real Joern, GraphSAGE, TVLA, AFL++, llama.cpp, ASan, and UBSan services can be connected without rewriting the UI.
-- Analysis mutations return queued/running states rather than claiming completed security results; demo evidence is visibly labeled in the console.
-- The API prototype keeps target and analysis state in an in-memory service boundary until persistent storage and isolated execution workers are connected.
+*   **Frontend**: React, Vite, Tailwind CSS, Lucide icons, Radix UI primitives, Recharts (for charts), and Wouter (routing).
+*   **Backend API**: Node.js, Express 5, and Pino (logging).
+*   **Database**: PostgreSQL + Drizzle ORM.
+*   **Data Validation & Types**: Zod, TypeScript 5.9, and Orval (API client generation from OpenAPI specification).
 
-## Product
+---
 
-The console lets operators register targets, start analysis runs, inspect pipeline progress, review evidence-backed findings, run timing and protocol test campaigns, review patch diffs, request security re-verification, and generate reports.
+## 📁 Repository Structure
 
-## User preferences
+```
+├── artifacts/
+│   ├── varuna-console/       # React/Vite operator console dashboard & workflow routes
+│   ├── api-server/           # Express API server for prototype endpoints & mockup data
+│   └── mockup-sandbox/       # Isolated mockup workspace for UI testing
+├── lib/
+│   ├── api-client-react/     # Generated typed React Query hooks (via Orval)
+│   ├── api-spec/             # OpenAPI 3.0 configuration (openapi.yaml)
+│   ├── api-zod/              # Zod validation schemas compiled from OpenAPI spec
+│   └── db/                   # Database configuration, schema, and migrations
+├── scripts/                  # Workspace utility scripts
+├── package.json              # Monorepo workspace configuration
+├── pnpm-workspace.yaml       # Workspace directories & Shared package catalog
+└── README.md                 # Project documentation
+```
 
-Use the uploaded reference image as the visual source of truth: a rounded, green-led operator dashboard with a persistent shell, clear hierarchy, and compact evidence surfaces.
+---
 
-## Gotchas
+## ⚙️ Getting Started
 
-- Run `pnpm --filter @workspace/api-spec run codegen` after OpenAPI changes before importing new generated hooks or schemas.
-- The Vite production build requires the `PORT` and `BASE_PATH` environment variables; provide both values when building.
+### Prerequisites
 
-## Pointers
+*   **Node.js**: `v24` or higher
+*   **Package Manager**: `pnpm` (enforced via preinstall checks)
+*   **Database**: PostgreSQL server instance
 
-- See the `pnpm-workspace.yaml` for workspace structure, TypeScript setup, and package details.
+### Environment Variables
+
+Create `.env` files where required. The core environment configuration:
+
+| Variable | Description | Example / Default |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | Postgres connection string | `postgresql://user:pass@localhost:5432/varuna` |
+| `PORT` | Running port for servers | `5000` (API Server) / `3000` (Console) |
+| `BASE_PATH` | Base URL path for assets | `/` |
+
+---
+
+## 🏃 Run & Operate
+
+Ensure all dependencies are installed before running scripts:
+```bash
+pnpm install
+```
+
+### Development Commands
+
+| Command | Action |
+| :--- | :--- |
+| `pnpm --filter @workspace/api-server run dev` | Start the Express API Server (default port: `5000`) |
+| `pnpm --filter @workspace/varuna-console dev` | Start the React Operator Console in development mode |
+| `pnpm run typecheck` | Perform complete TypeScript type-checking across all workspace modules |
+| `pnpm run build` | Validate all packages and compile production builds |
+| `pnpm --filter @workspace/api-spec run codegen` | Regenerate API client hooks and Zod schemas from `openapi.yaml` |
+| `pnpm --filter @workspace/db run push` | Push Drizzle schema changes directly to the PostgreSQL database |
+
+---
+
+## 🏗️ Architecture & Development Workflow
+
+1.  **OpenAPI-First Contract**: The API definition is maintained in [`lib/api-spec/openapi.yaml`](file:///Users/sarthak/Desktop/varuna-crs/lib/api-spec/openapi.yaml). When you modify the API contracts, always regenerate the types and client hooks:
+    ```bash
+    pnpm --filter @workspace/api-spec run codegen
+    ```
+2.  **Modular Adapters**: The API prototype uses a modular adapter design. Real analyzers (like Joern, AFL++, TVLA, llama.cpp, ASan) can be attached by implementing the service boundaries defined under [`artifacts/api-server/src/routes/varuna.ts`](file:///Users/sarthak/Desktop/varuna-crs/artifacts/api-server/src/routes/varuna.ts).
+3.  **Local Mockup / Sandbox**: For visual components and design iterations, you can run and view the mockup console using:
+    ```bash
+    pnpm --filter @workspace/mockup-sandbox dev
+    ```
+
+---
+
+## ⚠️ Important Notes
+
+*   **Build Environment Requirements**: Building Vite production outputs manually requires setting `PORT` and `BASE_PATH` (e.g., `PORT=3000 BASE_PATH=/ pnpm run build`).
+*   **Database Migrations**: During local development, schema changes can be pushed directly to your local database using `pnpm --filter @workspace/db run push`.
