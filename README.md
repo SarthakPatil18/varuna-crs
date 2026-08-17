@@ -44,8 +44,8 @@ Use the uploaded reference image as the visual source of truth: a rounded, green
 ## Gotchas
 
 - Run `pnpm --filter @workspace/api-spec run codegen` after OpenAPI changes before importing new generated hooks or schemas.
-- The Vite production build requires the managed workflow's `PORT` and `BASE_PATH`; use the workflow for normal verification or provide both values when building manually.
+- The Vite production build requires the `PORT` and `BASE_PATH` environment variables; provide both values when building.
 
 ## Pointers
 
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- See the `pnpm-workspace.yaml` for workspace structure, TypeScript setup, and package details.
