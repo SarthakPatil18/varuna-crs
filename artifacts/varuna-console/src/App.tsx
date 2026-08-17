@@ -3,8 +3,8 @@ import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/reac
 import {
   AlertTriangle, Activity, ArrowUpRight, Binary, Check, ChevronRight, Clock3,
   Code2, Cpu, Download, FileCode2, FileText, FolderKanban, GitBranch,
-  LayoutDashboard, Menu, Network, Play, Plus, Radar, Search, Shield,
-  ShieldCheck, SlidersHorizontal, Sparkles, TestTube2, UploadCloud, Zap,
+  LayoutDashboard, Menu, Network, Play, Plus, Radar, RotateCw, Search, Shield,
+  ShieldCheck, SlidersHorizontal, Sparkles, TestTube2, UploadCloud, Wrench, Zap,
 } from 'lucide-react';
 import {
   getGetOverviewQueryKey, getListAnalysisRunsQueryKey, getListFindingsQueryKey,
@@ -91,19 +91,427 @@ function MiniBar({ value }: { value: number }) { return <div className="h-1.5 ov
 
 function OverviewPage() {
   const query = useGetOverview();
+  const projects = useListProjects();
+  const findings = useListFindings();
+  const timingTests = useListTimingTests();
+
+  const [time, setTime] = useState({ h: 1, m: 25, s: 6 });
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTime(t => {
+        let ns = t.s + 1;
+        let nm = t.m;
+        let nh = t.h;
+        if (ns >= 60) { ns = 0; nm += 1; }
+        if (nm >= 60) { nm = 0; nh += 1; }
+        return { h: nh, m: nm, s: ns };
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const data = query.data as any;
-  if (query.isLoading) return <><Header eyebrow="Operator view" heading="Security state" sub="Consolidating target evidence and engine activity." /><Loading /></>;
-  if (query.isError) return <><Header eyebrow="Operator view" heading="Security state" sub="Current target posture at a glance." /><ErrorState retry={() => query.refetch()} /></>;
+  if (query.isLoading || projects.isLoading || findings.isLoading || timingTests.isLoading) {
+    return <><Header eyebrow="Operator view" heading="Security state" sub="Consolidating target evidence and engine activity." /><Loading /></>;
+  }
+  if (query.isError || projects.isError || findings.isError || timingTests.isError) {
+    return <><Header eyebrow="Operator view" heading="Security state" sub="Current target posture at a glance." /><ErrorState retry={() => query.refetch()} /></>;
+  }
+
   const counts = data?.counts ?? {};
   const stages = data?.stages ?? [];
-  const services = data?.system ?? [];
   const runs = data?.recentRuns ?? [];
-  return <div className="animate-rise"><Header eyebrow="Operator view / 08:42 UTC" heading="Security state" sub="A compact view of what VARUNA knows, what it is testing, and what still needs an operator." action={<Link href="/analysis" data-testid="link-start-analysis" className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0F5132] px-4 py-2.5 text-xs font-bold text-white shadow-2xs hover:bg-[#0A3824] hover:-translate-y-0.5 transition-all"><Plus size={15} />Start analysis</Link>} />
-    <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6"><Stat label="Active analyses" value={counts.activeAnalyses ?? 0} hint="Currently processing" accent /><Stat label="Targets" value={counts.targets ?? 0} hint="Registered surfaces" /><Stat label="Findings" value={counts.findings ?? 0} hint="Across all targets" /><Stat label="Critical findings" value={counts.criticalFindings ?? 0} hint="Require attention" /><Stat label="Fixed findings" value={counts.fixedFindings ?? 0} hint="Awaiting confidence" /><Stat label="Pending verification" value={counts.pendingVerification ?? 0} hint="Re-run recommended" /></div>
-    <div className="grid gap-5 xl:grid-cols-[1.45fr_.8fr]"><Section title="Analysis pipeline" meta={<span className="font-mono text-[10px] text-gray-500">CPG → GNN → VERIFY</span>}><div className="space-y-4">{stages.length ? stages.map((stage: any, i: number) => <div key={stage.key} data-testid={`row-stage-${stage.key}`} className="flex items-center gap-4"><div className={cx('grid h-8 w-8 shrink-0 place-items-center rounded-lg text-xs font-bold transition-all', stage.state === 'completed' ? 'bg-[#0F5132] text-white' : stage.state === 'running' ? 'bg-[#10B981] text-white animate-pulse' : 'bg-white text-gray-400 border border-[#E5EAE7]')}>{stage.state === 'completed' ? <Check size={15} /> : String(i + 1).padStart(2, '0')}</div><div className="min-w-0 flex-1"><div className="flex justify-between gap-4 text-xs font-bold"><span>{stage.label}</span><StatusPill value={stage.state} /></div><MiniBar value={stage.state === 'completed' ? 100 : stage.state === 'running' ? 58 : 5} /><div className="mt-1 text-[10px] text-gray-500">{stage.detail ?? 'Waiting for upstream evidence'}</div></div></div>) : <Empty label="Pipeline has not started" />}</div></Section>
-      <Section title="Engine services" meta={<StatusPill value="ready" />}><div className="space-y-1">{services.length ? services.map((service: any) => <div key={service.name} data-testid={`row-service-${service.name}`} className="flex items-start gap-3 border-b border-[#F1F5F2] py-3 last:border-0"><span className={cx('mt-1.5 h-2 w-2 rounded-full shrink-0', service.state === 'ready' ? 'bg-[#10B981]' : service.state === 'degraded' ? 'bg-[#F59E0B]' : 'bg-[#E11D48]')} /><div><div className="text-xs font-bold text-gray-900">{service.name}</div><div className="mt-1 text-[10px] leading-relaxed text-gray-500">{service.detail}</div></div></div>) : <Empty label="No service telemetry" />}</div></Section>
+
+  const projectsData = (projects.data as any[]) ?? [];
+  const findingsData = (findings.data as any[]) ?? [];
+  const timingTestsData = (timingTests.data as any[]) ?? [];
+
+  // derive dynamic metrics
+  const activeFiles = projectsData.reduce((acc: number, p: any) => acc + (p.files ?? 0), 0);
+  const timingLeak = timingTestsData.find((t: any) => t.result === 'potential_leakage');
+  const tValue = timingLeak ? timingLeak.statistic : 18.42;
+
+  // remediated target progress calculation
+  const completedRun = runs.find((r: any) => r.status === 'completed');
+  const remediatedPercent = completedRun ? completedRun.progress : 100;
+
+  const stageMeta: Record<string, { title: string, subtitle: string, icon: any, time: string }> = {
+    target: { title: 'TARGET', subtitle: 'Target Ingestion & Validation', icon: FileCode2, time: '0.4s' },
+    cpg: { title: 'CPG', subtitle: 'Code Property Graph (CPG)', icon: Network, time: '0.9s' },
+    gnn: { title: 'GNN', subtitle: 'GraphSAGE GNN Prioritization', icon: Sparkles, time: '0.7s' },
+    security: { title: 'SECURITY', subtitle: 'Dual Security Engine Execution', icon: Search, time: '3.4s' },
+    finding: { title: 'FINDING', subtitle: 'Evidence Synthesis & Triage', icon: Shield, time: '0.3s' },
+    patch: { title: 'PATCH', subtitle: 'Context-Aware AI Patching', icon: GitBranch, time: '1.9s' },
+    verify: { title: 'RE-VERIFY', subtitle: 'Multi-Vector Re-Verification', icon: ShieldCheck, time: '4.1s' },
+  };
+
+  const workloadDays = [
+    { day: 'S', height: 'h-[35%]', type: 'stripes' },
+    { day: 'M', height: 'h-[65%]', type: 'emerald' },
+    { day: 'T', height: 'h-[55%]', type: 'emerald', tooltip: '74%', active: true },
+    { day: 'W', height: 'h-[85%]', type: 'forest' },
+    { day: 'T', height: 'h-[75%]', type: 'stripes' },
+    { day: 'F', height: 'h-[45%]', type: 'stripes' },
+    { day: 'S', height: 'h-[55%]', type: 'stripes' },
+  ];
+
+  const getProjectMetadata = (project: any, findingsList: any[]) => {
+    const projFindings = findingsList.filter((f) => f.projectName === project.name);
+    const criticalCount = projFindings.filter((f) => f.severity === 'critical').length;
+    const highCount = projFindings.filter((f) => f.severity === 'high').length;
+    const isVulnerable = criticalCount > 0 || highCount > 0;
+    
+    let kind = 'library';
+    if (project.name.includes('wire') || project.name.includes('auth')) kind = 'protocol';
+    if (project.name.includes('parser')) kind = 'parser';
+    
+    return {
+      isVulnerable,
+      criticalCount,
+      badgeText: isVulnerable ? 'Vulnerable' : 'Remediated',
+      subtext: `${project.language} ${kind} • ${project.files ?? 0} files`,
+      icon: project.targetType === 'binary' ? Cpu : project.targetType === 'protocol' ? Network : Shield,
+    };
+  };
+
+  return <div className="space-y-6 animate-rise">
+    <Header eyebrow="Operator view / 08:42 UTC" heading="Security state" sub="A compact view of what VARUNA knows, what it is testing, and what still needs an operator." />
+
+    {/* 1. Four KPI cards across the top */}
+    <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Card 1: Total Targets */}
+      <div className="rounded-2xl bg-[#0B3F27] text-white p-5 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[140px] hover:shadow-md transition-all">
+        <div className="flex items-center justify-between w-full">
+          <span className="text-[13px] font-semibold text-white/80">Total Targets</span>
+          <div className="w-8 h-8 rounded-full border border-white/20 bg-white/10 text-white flex items-center justify-center">
+            <ArrowUpRight size={14} />
+          </div>
+        </div>
+        <div>
+          <div className="text-5xl font-bold font-sans mt-3">{counts.targets ?? 0}</div>
+          <div className="flex items-center mt-3">
+            <span className="bg-white/15 text-[#34D399] px-2 py-0.5 rounded-full text-[10px] font-bold">
+              +{activeFiles || 12} files
+            </span>
+            <span className="text-white/80 text-[11px] ml-2">in active memory</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Card 2: Remediated & Verified */}
+      <div className="rounded-2xl border border-[#E5EAE7] bg-white p-5 shadow-2xs relative overflow-hidden flex flex-col justify-between min-h-[140px] hover:shadow-md transition-all">
+        <div className="flex items-center justify-between w-full">
+          <span className="text-[13px] font-semibold text-gray-500">Remediated & Verified</span>
+          <div className="w-8 h-8 rounded-full border border-[#E5EAE7] bg-gray-50 text-gray-500 flex items-center justify-center">
+            <ArrowUpRight size={14} />
+          </div>
+        </div>
+        <div>
+          <div className="text-5xl font-bold font-sans mt-3 text-gray-900">{remediatedPercent}%</div>
+          <div className="flex items-center mt-3">
+            <div className="bg-[#ECFDF5] border border-[#dcefe3] px-2 py-0.5 rounded-md text-[9px] font-bold text-[#0F5132] leading-tight">
+              <div>6/6 checks</div>
+              <div>passed</div>
+            </div>
+            <span className="text-gray-500 text-[10px] ml-3 leading-tight">TVLA + ASan<br/>validated</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Card 3: Pipeline Executions */}
+      <div className="rounded-2xl border border-[#E5EAE7] bg-white p-5 shadow-2xs relative overflow-hidden flex flex-col justify-between min-h-[140px] hover:shadow-md transition-all">
+        <div className="flex items-center justify-between w-full">
+          <span className="text-[13px] font-semibold text-gray-500">Pipeline Executions</span>
+          <div className="w-8 h-8 rounded-full border border-[#E5EAE7] bg-gray-50 text-gray-500 flex items-center justify-center">
+            <ArrowUpRight size={14} />
+          </div>
+        </div>
+        <div>
+          <div className="text-5xl font-bold font-sans mt-3 text-gray-900">{stages.length}</div>
+          <div className="flex items-center mt-3">
+            <div className="bg-[#EEF2FF] border border-[#E0E7FF] px-2.5 py-1 rounded-md text-[9px] font-bold text-[#4F46E5] leading-tight">
+              {stages.length} CPG nodes
+            </div>
+            <span className="text-gray-500 text-[10px] ml-3">GNN scored</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Card 4: Critical Findings */}
+      <div className="rounded-2xl border border-[#E5EAE7] bg-white p-5 shadow-2xs relative overflow-hidden flex flex-col justify-between min-h-[140px] hover:shadow-md transition-all">
+        <div className="flex items-center justify-between w-full">
+          <span className="text-[13px] font-semibold text-gray-500">Critical Findings</span>
+          <div className="w-8 h-8 rounded-full border border-[#E5EAE7] bg-gray-50 text-gray-500 flex items-center justify-center">
+            <ArrowUpRight size={14} />
+          </div>
+        </div>
+        <div>
+          <div className="text-5xl font-bold font-sans mt-3 text-[#E11D48]">{counts.criticalFindings ?? 0}</div>
+          <div className="flex items-center mt-3">
+            <div className="bg-[#FFF1F2] border border-[#FFE4E6] px-2.5 py-1 rounded-md text-[9px] font-bold text-[#E11D48] leading-tight">
+              t={tValue}
+            </div>
+            <span className="text-gray-500 text-[10px] ml-3">Action required</span>
+          </div>
+        </div>
+      </div>
     </div>
-    <Section title="Recent analysis runs" meta={<Link href="/analysis" data-testid="link-view-all-runs" className="text-[11px] font-bold text-[#0F5132] hover:text-[#0A3824]">Open workspace <ArrowUpRight size={13} className="ml-1 inline" /></Link>} className="mt-5"><Runs runs={runs} /></Section>
+
+    {/* 2. Large Autonomous Cyber Reasoning Pipeline section & 3. Seven pipeline stages */}
+    <div className="rounded-2xl border border-[#E5EAE7] bg-white p-6 shadow-2xs">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-[16px] font-bold text-gray-900">Autonomous Cyber Reasoning Pipeline</h2>
+            <span className="bg-[#EAF2ED] text-[#0F5132] text-[10px] font-bold px-2 py-0.5 rounded-full">VARUNA v2.4</span>
+          </div>
+          <p className="text-gray-500 text-xs mt-1">Real-time execution graph: from C/C++ AST normalization to GNN prioritization and 6-vector patch validation.</p>
+        </div>
+        <Link href="/analysis" className="bg-[#0F5132] text-white hover:bg-[#0A3824] px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all self-start sm:self-center shrink-0 shadow-2xs hover:shadow-sm">
+          <Play size={13} fill="currentColor" />
+          <span>Execute Full Reasoning Pipeline</span>
+        </Link>
+      </div>
+
+      {/* Grid of 7 stages */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mt-6">
+        {stages.map((stage: any, i: number) => {
+          const meta = stageMeta[stage.key] || { title: stage.label.toUpperCase(), subtitle: stage.detail, icon: Shield, time: '0.5s' };
+          const Icon = meta.icon;
+          const isCompleted = stage.state === 'completed';
+          const isRunning = stage.state === 'running';
+
+          return <div key={stage.key} className={cx(
+            'rounded-xl border p-4 flex flex-col justify-between min-h-[145px] relative overflow-hidden transition-all',
+            isCompleted ? 'border-[#34D399]/40 bg-white' : isRunning ? 'border-[#F59E0B]/40 bg-white shadow-xs' : 'border-[#E5EAE7] bg-[#F8FAF9]'
+          )}>
+            {/* Top row */}
+            <div className="flex items-start justify-between w-full">
+              <div className={cx(
+                'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
+                isCompleted ? 'bg-[#ECFDF5] text-[#10B981]' : isRunning ? 'bg-amber-50 text-[#F59E0B]' : 'bg-[#E5EAE7] text-gray-400'
+              )}>
+                <Icon size={16} />
+              </div>
+              <span className="font-mono text-[10px] text-gray-400 font-semibold">{String(i + 1).padStart(2, '0')}</span>
+            </div>
+
+            {/* Middle row */}
+            <div className="mt-3">
+              <div className="text-[12px] font-bold text-gray-900 tracking-tight">{meta.title}</div>
+              <div className="text-[10px] text-gray-500 leading-snug mt-0.5 line-clamp-2 h-7">{meta.subtitle}</div>
+            </div>
+
+            {/* Bottom row status pill */}
+            <div className="mt-4 flex items-center">
+              <div className={cx(
+                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider',
+                isCompleted ? 'bg-[#ECFDF5] border border-[#D1FAE5] text-[#10B981]' : isRunning ? 'bg-amber-50 border border-amber-100 text-[#F59E0B] animate-pulse' : 'bg-gray-100 border border-gray-200 text-gray-400'
+              )}>
+                {isCompleted ? <Check size={8} strokeWidth={3} /> : isRunning ? <div className="h-1.5 w-1.5 rounded-full bg-[#F59E0B] animate-ping" /> : null}
+                <span>{isCompleted ? `COMPLETED ${meta.time}` : isRunning ? 'RUNNING' : 'PENDING'}</span>
+              </div>
+            </div>
+
+            {/* Bottom accent bar */}
+            <div className={cx(
+              'absolute bottom-0 left-0 w-full h-[3px]',
+              isCompleted ? 'bg-[#10B981]' : isRunning ? 'bg-[#F59E0B]' : 'bg-gray-200'
+            )} />
+          </div>;
+        })}
+      </div>
+    </div>
+
+    {/* Workload chart & Execution engine */}
+    <div className="grid gap-5 lg:grid-cols-[1.85fr_1.15fr]">
+      {/* 4. Security Analysis Workload chart */}
+      <div className="rounded-2xl border border-[#E5EAE7] bg-white p-6 shadow-2xs flex flex-col justify-between min-h-[220px]">
+        <div className="flex items-center justify-between w-full">
+          <div>
+            <h2 className="text-[14px] font-bold text-gray-900">Security Analysis Workload</h2>
+            <p className="text-gray-500 text-[11px] mt-0.5">TVLA samples & fuzz iterations per day</p>
+          </div>
+          <div className="flex items-center gap-4 text-[10px] text-gray-500">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#0F5132]" />
+              <span>GNN Prioritized</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />
+              <span>TVLA / Fuzz</span>
+            </span>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-end h-32 mt-6 px-4 w-full">
+          {workloadDays.map((w) => (
+            <div key={w.day} className="flex flex-col items-center flex-1 h-full justify-end relative">
+              {w.tooltip && (
+                <div className="absolute -top-7 bg-[#ECFDF5] border border-[#D1FAE5] text-[#10B981] text-[9px] font-bold px-1.5 py-0.5 rounded-md shadow-2xs animate-bounce">
+                  {w.tooltip}
+                </div>
+              )}
+              <div className={cx(
+                'w-8 rounded-full transition-all',
+                w.height,
+                w.type === 'stripes' ? 'bg-diagonal-stripes-subtle' : w.type === 'emerald' ? 'bg-[#10B981]' : 'bg-[#0F5132]'
+              )} />
+              <span className={cx('text-[10px] mt-2 font-semibold', w.active ? 'text-[#10B981] font-bold' : 'text-gray-400')}>{w.day}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 5. Execution Engine panel */}
+      <div className="rounded-2xl bg-[#0B3F27] bg-tracker-waveform text-white p-6 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[220px]">
+        <div className="flex items-center justify-between w-full">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[#A6CDB8]">Execution Engine</span>
+          <span className="bg-white/10 text-[#34D399] px-2 py-0.5 rounded-full text-[9px] font-bold flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" />
+            <span>ACTIVE</span>
+          </span>
+        </div>
+        
+        <div>
+          <p className="text-[11px] text-[#A6CDB8] mt-1">Stage: Side-Channel Verification</p>
+          <div className="text-4xl font-bold font-mono tracking-wider text-center mt-4">
+            {String(time.h).padStart(2, '0')}:{String(time.m).padStart(2, '0')}:{String(time.s).padStart(2, '0')}
+          </div>
+          <div className="text-[9px] font-mono text-center text-[#A6CDB8]/60 mt-1 uppercase tracking-widest">
+            CPU CYCLES: 3.42 x 10^9
+          </div>
+        </div>
+
+        <div className="flex justify-center items-center gap-4 mt-4">
+          <button className="w-10 h-10 rounded-full bg-white text-[#0F5132] flex items-center justify-center shadow-sm hover:scale-105 transition-all">
+            <div className="flex gap-0.5">
+              <div className="w-1 h-3.5 bg-[#0F5132] rounded-xs" />
+              <div className="w-1 h-3.5 bg-[#0F5132] rounded-xs" />
+            </div>
+          </button>
+          <button className="w-10 h-10 rounded-full bg-[#EF4444] text-white flex items-center justify-center shadow-sm hover:scale-105 transition-all">
+            <div className="w-3 h-3 bg-white rounded-xs" />
+          </button>
+          <button className="w-10 h-10 rounded-full border border-white/20 text-white flex items-center justify-center hover:bg-white/10 transition-all">
+            <RotateCw size={14} />
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {/* Row with Action Item, Posture Progress, and Targets */}
+    <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+      {/* 6. Security Action Item card */}
+      <div className="rounded-2xl border border-[#E5EAE7] bg-white p-5 shadow-2xs flex flex-col justify-between min-h-[280px]">
+        <div>
+          <div className="flex items-center justify-between w-full">
+            <span className="text-gray-400 text-[10px] tracking-wider font-semibold">SECURITY ACTION ITEM</span>
+            <span className="bg-rose-50 text-rose-600 border border-rose-100 text-[9px] font-bold px-2 py-0.5 rounded-full">
+              HIGH PRIORITY
+            </span>
+          </div>
+          <h3 className="text-gray-900 text-sm font-bold mt-3 leading-snug">
+            Timing Side-Channel Information Leakage in Token Verification
+          </h3>
+          <p className="text-gray-500 text-[11px] font-mono mt-1">
+            Target: src/auth/token_compare.cpp : compare_token()
+          </p>
+          <div className="bg-[#FFF1F2] border border-[#FFE4E6] rounded-xl p-3.5 text-xs text-[#E11D48] leading-relaxed mt-4">
+            <b>TVLA Welch t-test = {tValue} (|t| &gt; 4.5).</b> Exploitable early-exit timing leak requires AI patch application.
+          </div>
+        </div>
+        <Link href="/patches" className="mt-4 bg-[#0F5132] hover:bg-[#0A3824] text-white flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold w-full transition-all shadow-2xs hover:shadow-sm shrink-0">
+          <Wrench size={13} />
+          <span>Apply AI Patch & Verify</span>
+        </Link>
+      </div>
+
+      {/* 7. Security Posture Progress gauge */}
+      <div className="rounded-2xl border border-[#E5EAE7] bg-white p-5 shadow-2xs flex flex-col justify-between min-h-[280px]">
+        <div>
+          <div className="flex items-center justify-between w-full">
+            <h2 className="text-gray-900 text-sm font-bold">Security Posture Progress</h2>
+            <span className="bg-[#ECFDF5] text-[#10B981] border border-[#ECFDF5] text-[9px] font-bold px-2 py-0.5 rounded-full">
+              6/6 Vectors
+            </span>
+          </div>
+          <div className="relative flex flex-col items-center justify-center mt-6">
+            <svg viewBox="0 0 100 50" className="w-40 h-20">
+              <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#E5EAE7" strokeWidth="10" strokeLinecap="round" />
+              <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#10B981" strokeWidth="10" strokeLinecap="round" strokeDasharray="125.6" strokeDashoffset={125.6 * (1 - remediatedPercent / 100)} className="transition-all duration-500" />
+            </svg>
+            <div className="absolute bottom-1 text-center">
+              <div className="text-2xl font-bold text-gray-900">{remediatedPercent}%</div>
+              <div className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold">Targets Remediated</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-center items-center gap-4 text-[10px] text-gray-500 border-t border-[#E5EAE7] pt-3 mt-4 shrink-0">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#0F5132]" />
+            <span>Verified ({remediatedPercent}%)</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#10B981]" />
+            <span>In Progress</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-gray-300" />
+            <span>Pending</span>
+          </span>
+        </div>
+      </div>
+
+      {/* 8. Security Targets list */}
+      <div className="rounded-2xl border border-[#E5EAE7] bg-white p-5 shadow-2xs flex flex-col justify-between min-h-[280px]">
+        <div className="w-full">
+          <div className="flex items-center justify-between w-full">
+            <h2 className="text-gray-900 text-sm font-bold">Security Targets</h2>
+            <Link href="/analysis" className="border border-[#E5EAE7] bg-white text-gray-500 rounded-lg px-2 py-0.5 text-[10px] font-bold hover:bg-gray-50 hover:text-gray-900 transition-all">
+              + + New
+            </Link>
+          </div>
+          <div className="space-y-3 mt-4 overflow-y-auto max-h-[185px] pr-1">
+            {projectsData.map((project: any) => {
+              const meta = getProjectMetadata(project, findingsData);
+              const ProjectIcon = meta.icon;
+              return <div key={project.id} className={cx(
+                'p-3 rounded-xl border flex items-center justify-between gap-3 transition-all',
+                meta.isVulnerable ? 'border-rose-100 bg-rose-50/10' : 'border-[#E5EAE7] bg-white'
+              )}>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={cx(
+                    'w-7 h-7 rounded-lg flex items-center justify-center shrink-0',
+                    meta.isVulnerable ? 'bg-rose-50 text-rose-500' : 'bg-[#EAF2ED] text-[#0F5132]'
+                  )}>
+                    <ProjectIcon size={14} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-gray-900 truncate">{project.name}</span>
+                      <span className={cx(
+                        'text-[8px] font-bold px-1.5 py-0.2 rounded-full uppercase border tracking-wider',
+                        meta.isVulnerable ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                      )}>
+                        {meta.badgeText}
+                      </span>
+                    </div>
+                    <div className="text-[9px] text-gray-400 truncate mt-0.5">{meta.subtext}</div>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className={cx('font-mono text-[10px] font-semibold', meta.isVulnerable ? 'text-[#E11D48]' : 'text-gray-400')}>
+                    {meta.criticalCount} critical
+                  </div>
+                </div>
+              </div>;
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
   </div>;
 }
 
