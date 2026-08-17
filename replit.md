@@ -1,6 +1,6 @@
-# [Project name]
+# VARUNA Security Console
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+VARUNA is an evidence-first cybersecurity analysis console for graph-guided code reasoning, timing side-channel testing, protocol fuzzing, patch review, and security re-verification.
 
 ## Run & Operate
 
@@ -22,23 +22,29 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/varuna-console` — React/Vite operator console with the persistent dashboard shell and workflow routes.
+- `artifacts/api-server/src/routes/varuna.ts` — prototype VARUNA API surface with clearly bounded demo data and queueable workflow mutations.
+- `lib/api-spec/openapi.yaml` — source of truth for the typed overview, targets, runs, findings, timing, protocol, patch, verification, and report contracts.
+- `attached_assets/image_1786939138391.png` — visual direction reference for the console shell and hierarchy.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The first prototype uses a typed server contract and modular adapters so real Joern, GraphSAGE, TVLA, AFL++, llama.cpp, ASan, and UBSan services can be connected without rewriting the UI.
+- Analysis mutations return queued/running states rather than claiming completed security results; demo evidence is visibly labeled in the console.
+- The API prototype keeps target and analysis state in an in-memory service boundary until persistent storage and isolated execution workers are connected.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+The console lets operators register targets, start analysis runs, inspect pipeline progress, review evidence-backed findings, run timing and protocol test campaigns, review patch diffs, request security re-verification, and generate reports.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+Use the uploaded reference image as the visual source of truth: a rounded, green-led operator dashboard with a persistent shell, clear hierarchy, and compact evidence surfaces.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Run `pnpm --filter @workspace/api-spec run codegen` after OpenAPI changes before importing new generated hooks or schemas.
+- The Vite production build requires the managed workflow's `PORT` and `BASE_PATH`; use the workflow for normal verification or provide both values when building manually.
 
 ## Pointers
 

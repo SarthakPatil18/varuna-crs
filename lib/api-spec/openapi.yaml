@@ -3,13 +3,31 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: VARUNA security analysis console API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: overview
+    description: Overview and system status
+  - name: projects
+    description: Analysis targets
+  - name: analysis
+    description: Analysis runs
+  - name: findings
+    description: Security findings
+  - name: timing
+    description: Timing side-channel tests
+  - name: protocol
+    description: Custom protocol fuzzing tests
+  - name: patches
+    description: Patch proposals and applications
+  - name: verification
+    description: Security re-verification
+  - name: reports
+    description: Analysis reports
 paths:
   /healthz:
     get:
@@ -24,7 +42,239 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /overview:
+    get:
+      operationId: getOverview
+      tags: [overview]
+      summary: Get the operator overview
+      responses:
+        "200":
+          description: Overview data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Overview"
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List analysis targets
+      responses:
+        "200":
+          description: Analysis targets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Register an analysis target
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Created target
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+  /analysis-runs:
+    get:
+      operationId: listAnalysisRuns
+      tags: [analysis]
+      summary: List analysis runs
+      responses:
+        "200":
+          description: Analysis runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AnalysisRun"
+    post:
+      operationId: createAnalysisRun
+      tags: [analysis]
+      summary: Start an analysis run
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalysisRunInput"
+      responses:
+        "201":
+          description: Started analysis run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisRun"
+  /findings:
+    get:
+      operationId: listFindings
+      tags: [findings]
+      summary: List security findings
+      responses:
+        "200":
+          description: Security findings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Finding"
+  /findings/{id}:
+    get:
+      operationId: getFinding
+      tags: [findings]
+      summary: Get finding evidence
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+      responses:
+        "200":
+          description: Finding detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FindingDetail"
+        "404":
+          description: Finding not found
+  /timing-tests:
+    get:
+      operationId: listTimingTests
+      tags: [timing]
+      summary: List timing side-channel tests
+      responses:
+        "200":
+          description: Timing tests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimingTest"
+    post:
+      operationId: createTimingTest
+      tags: [timing]
+      summary: Run a timing side-channel test
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimingTestInput"
+      responses:
+        "201":
+          description: Timing test queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimingTest"
+  /protocol-tests:
+    get:
+      operationId: listProtocolTests
+      tags: [protocol]
+      summary: List protocol fuzzing tests
+      responses:
+        "200":
+          description: Protocol tests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProtocolTest"
+    post:
+      operationId: createProtocolTest
+      tags: [protocol]
+      summary: Run a protocol mutation campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProtocolTestInput"
+      responses:
+        "201":
+          description: Protocol test queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProtocolTest"
+  /patches:
+    get:
+      operationId: listPatches
+      tags: [patches]
+      summary: List patch proposals
+      responses:
+        "200":
+          description: Patches
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Patch"
+  /patches/{id}/verify:
+    post:
+      operationId: verifyPatch
+      tags: [verification]
+      summary: Re-run security tests for a patch
+      parameters:
+        - $ref: "#/components/parameters/EntityId"
+      responses:
+        "201":
+          description: Verification run queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerificationRun"
+  /reports:
+    get:
+      operationId: listReports
+      tags: [reports]
+      summary: List generated reports
+      responses:
+        "200":
+          description: Reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Report"
+    post:
+      operationId: createReport
+      tags: [reports]
+      summary: Generate an analysis report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportInput"
+      responses:
+        "201":
+          description: Report queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
 components:
+  parameters:
+    EntityId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +283,274 @@ components:
           type: string
       required:
         - status
+    EntityState:
+      type: string
+      enum: [pending, running, completed, failed, skipped]
+    Severity:
+      type: string
+      enum: [critical, high, medium, low, informational]
+    FindingStatus:
+      type: string
+      enum: [detected, investigating, patch_proposed, patch_applied, verification_pending, verified, rejected]
+    Project:
+      type: object
+      required: [id, name, targetType, language, status, files, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        targetType:
+          type: string
+          enum: [source, binary, protocol]
+        language: { type: string }
+        files: { type: number }
+        status:
+          type: string
+          enum: [active, analyzing, findings, verified, archived]
+        createdAt: { type: string }
+        updatedAt: { type: string }
+    ProjectInput:
+      type: object
+      required: [name, targetType, language]
+      properties:
+        name: { type: string, minLength: 1 }
+        description: { type: string }
+        targetType:
+          type: string
+          enum: [source, binary, protocol]
+        language: { type: string, minLength: 1 }
+    PipelineStage:
+      type: object
+      required: [key, label, state]
+      properties:
+        key:
+          type: string
+          enum: [target, cpg, gnn, security, finding, patch, verify]
+        label: { type: string }
+        state:
+          $ref: "#/components/schemas/EntityState"
+        detail: { type: string }
+    SystemService:
+      type: object
+      required: [name, state, detail]
+      properties:
+        name: { type: string }
+        state:
+          type: string
+          enum: [ready, offline, degraded]
+        detail: { type: string }
+    Overview:
+      type: object
+      required: [counts, stages, system, recentRuns]
+      properties:
+        counts:
+          type: object
+          required: [activeAnalyses, targets, findings, criticalFindings, fixedFindings, pendingVerification]
+          properties:
+            activeAnalyses: { type: number }
+            targets: { type: number }
+            findings: { type: number }
+            criticalFindings: { type: number }
+            fixedFindings: { type: number }
+            pendingVerification: { type: number }
+        stages:
+          type: array
+          items: { $ref: "#/components/schemas/PipelineStage" }
+        system:
+          type: array
+          items: { $ref: "#/components/schemas/SystemService" }
+        recentRuns:
+          type: array
+          items: { $ref: "#/components/schemas/AnalysisRun" }
+    AnalysisRun:
+      type: object
+      required: [id, projectId, projectName, status, currentStage, progress, modules, startedAt, updatedAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        projectName: { type: string }
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        currentStage: { type: string }
+        progress: { type: number, minimum: 0, maximum: 100 }
+        modules:
+          type: array
+          items:
+            type: string
+            enum: [cpg, gnn, timing, protocol, asan, ubsan]
+        findings: { type: number }
+        verificationStatus:
+          type: string
+          enum: [not_started, pending, passed, failed]
+        startedAt: { type: string }
+        completedAt: { type: ["string", "null"] }
+        updatedAt: { type: string }
+        error: { type: ["string", "null"] }
+    AnalysisRunInput:
+      type: object
+      required: [projectId, modules]
+      properties:
+        projectId: { type: string }
+        modules:
+          type: array
+          items:
+            type: string
+            enum: [cpg, gnn, timing, protocol, asan, ubsan]
+          minItems: 1
+    Finding:
+      type: object
+      required: [id, title, severity, type, cwe, projectName, file, line, function, method, score, status, detectedAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        severity: { $ref: "#/components/schemas/Severity" }
+        type: { type: string }
+        cwe: { type: string }
+        projectName: { type: string }
+        file: { type: string }
+        line: { type: number }
+        function: { type: string }
+        method: { type: string }
+        score: { type: number, minimum: 0, maximum: 1 }
+        status: { $ref: "#/components/schemas/FindingStatus" }
+        detectedAt: { type: string }
+    FindingDetail:
+      allOf:
+        - $ref: "#/components/schemas/Finding"
+        - type: object
+          required: [evidence, code, graphPath]
+          properties:
+            evidence:
+              type: array
+              items: { type: string }
+            code:
+              type: array
+              items:
+                type: object
+                required: [line, text, highlighted]
+                properties:
+                  line: { type: number }
+                  text: { type: string }
+                  highlighted: { type: boolean }
+            graphPath:
+              type: array
+              items: { type: string }
+    TimingTest:
+      type: object
+      required: [id, projectName, function, samples, groups, statistic, threshold, result, state, beforeAfter, createdAt]
+      properties:
+        id: { type: string }
+        projectName: { type: string }
+        function: { type: string }
+        samples: { type: number }
+        groups: { type: number }
+        statistic: { type: number }
+        threshold: { type: number }
+        result:
+          type: string
+          enum: [potential_leakage, no_significant_leakage, inconclusive, not_run]
+        state: { $ref: "#/components/schemas/EntityState" }
+        beforeAfter:
+          type: string
+          enum: [before_patch, after_patch]
+        createdAt: { type: string }
+    TimingTestInput:
+      type: object
+      required: [projectId, function, samples]
+      properties:
+        projectId: { type: string }
+        function: { type: string }
+        samples: { type: number, minimum: 100 }
+    ProtocolTest:
+      type: object
+      required: [id, projectName, target, fields, strategy, inputs, coverage, crashes, uniqueCrashes, state, createdAt]
+      properties:
+        id: { type: string }
+        projectName: { type: string }
+        target: { type: string }
+        fields:
+          type: array
+          items: { type: string }
+        strategy:
+          type: array
+          items: { type: string }
+        inputs: { type: number }
+        coverage: { type: number }
+        crashes: { type: number }
+        uniqueCrashes: { type: number }
+        triggeringField: { type: ["string", "null"] }
+        state: { $ref: "#/components/schemas/EntityState" }
+        createdAt: { type: string }
+    ProtocolTestInput:
+      type: object
+      required: [projectId, target, strategy]
+      properties:
+        projectId: { type: string }
+        target: { type: string }
+        strategy:
+          type: array
+          items: { type: string }
+          minItems: 1
+    Patch:
+      type: object
+      required: [id, findingId, title, source, status, createdAt, originalCode, proposedCode, explanation]
+      properties:
+        id: { type: string }
+        findingId: { type: string }
+        title: { type: string }
+        source:
+          type: string
+          enum: [local_llm, manual, imported]
+        status:
+          type: string
+          enum: [proposed, applied, verification_pending, verified, rejected]
+        createdAt: { type: string }
+        originalCode: { type: string }
+        proposedCode: { type: string }
+        explanation: { type: string }
+    VerificationCheck:
+      type: object
+      required: [label, state, detail]
+      properties:
+        label: { type: string }
+        state:
+          type: string
+          enum: [pending, running, passed, failed, skipped]
+        detail: { type: string }
+    VerificationRun:
+      type: object
+      required: [id, patchId, status, checks, overall, createdAt]
+      properties:
+        id: { type: string }
+        patchId: { type: string }
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        checks:
+          type: array
+          items: { $ref: "#/components/schemas/VerificationCheck" }
+        overall:
+          type: string
+          enum: [not_verified, passed, failed, inconclusive]
+        createdAt: { type: string }
+    Report:
+      type: object
+      required: [id, projectName, status, generatedAt, findingCount, verificationStatus]
+      properties:
+        id: { type: string }
+        projectName: { type: string }
+        status:
+          type: string
+          enum: [queued, ready, failed]
+        generatedAt: { type: string }
+        findingCount: { type: number }
+        verificationStatus:
+          type: string
+          enum: [not_verified, partially_verified, verified]
+    ReportInput:
+      type: object
+      required: [projectId]
+      properties:
+        projectId: { type: string }
 

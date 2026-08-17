@@ -1,0 +1,839 @@
+Mission
+
+Create a production-grade, enterprise-quality web application for VARUNA, a Graph-Guided Autonomous Cyber Reasoning System.
+
+VARUNA is a cybersecurity analysis and remediation platform designed to:
+
+Analyze C/C++ code and target binaries
+
+Build a Code Property Graph (CPG)
+
+Use GraphSAGE-based GNN prioritization to identify suspicious functions, nodes, and security-critical regions
+
+Detect timing side-channel vulnerabilities using TVLA/Welch's t-test
+
+Analyze and fuzz undocumented/custom binary protocols using structure-aware, field-aware mutations
+
+Use a local LLM for vulnerability explanation and patch generation
+
+Re-run security analysis after patching
+
+Validate whether the vulnerability signal has been reduced or eliminated
+
+Present evidence, findings, patches, attack paths, and verification results through a unified dashboard
+
+The application is a working cybersecurity analysis tool, not a marketing website or static mockup.
+
+The provided visual reference image should be treated as the source of truth for the visual direction, layout, spacing, hierarchy, and overall interface appearance. Do not invent a different visual language.
+
+Core Product Workflow
+
+The primary VARUNA workflow should be:
+
+Target Upload → Analysis → Graph/Threat Prioritization → Security Analysis → Finding → Patch → Re-verification → Report
+
+The system must clearly communicate what VARUNA is currently doing and what evidence has been produced.
+
+A typical analysis should progress through:
+
+Target uploaded
+
+Target validated
+
+Code/target parsed
+
+Code Property Graph generated
+
+GNN prioritization performed
+
+Security-critical regions identified
+
+Timing analysis and/or protocol fuzzing executed
+
+Vulnerability detected
+
+Evidence collected
+
+Patch generated or applied
+
+Same security test re-run
+
+Regression/security validation completed
+
+Final result generated
+
+Application Structure
+
+Use Next.js App Router with a clear dashboard architecture.
+
+Recommended routes:
+
+/app   /(dashboard)     /overview     /analysis     /timing     /protocol     /findings     /patches     /verification     /reports 
+
+Use a persistent dashboard shell.
+
+Separate responsibilities clearly:
+
+Server state → TanStack Query
+
+Form state → React Hook Form
+
+UI state → local component state
+
+Database state → Supabase + Drizzle
+
+API/business logic → server-side services
+
+Validation → Zod
+
+Authentication/authorization → Clerk or Auth.js
+
+Long-running analysis → asynchronous job system
+
+Do not put business logic inside UI components.
+
+Core Entities
+
+Design the data model around the actual VARUNA workflow.
+
+Core entities should include:
+
+Projects
+
+Represents an analyzed software project or target.
+
+Fields should include appropriate identifiers, name, description, target type, status, created date, updated date, and ownership.
+
+Analysis Runs
+
+Represents one complete VARUNA analysis execution.
+
+Track:
+
+Project
+
+Status
+
+Current stage
+
+Start time
+
+Completion time
+
+Progress
+
+Selected analysis modules
+
+Findings
+
+Patch attempts
+
+Verification status
+
+Errors
+
+Graph Nodes
+
+Represent functions, statements, variables, or other relevant CPG nodes.
+
+Store:
+
+Node identifier
+
+File
+
+Line
+
+Function
+
+Node type
+
+GNN suspicion score
+
+Related graph information
+
+Findings
+
+Represent discovered security issues.
+
+Include:
+
+Severity
+
+Vulnerability type
+
+CWE when applicable
+
+File
+
+Line/function
+
+Detection method
+
+Evidence
+
+Status
+
+Related analysis run
+
+Timing Tests
+
+Track:
+
+Target function
+
+Sample count
+
+Timing groups
+
+Statistical test
+
+t-statistic
+
+threshold/configuration
+
+result
+
+before/after patch state
+
+Protocol Tests
+
+Track:
+
+Protocol target
+
+Inferred/defined structure
+
+Fields
+
+Mutation strategy
+
+Inputs tested
+
+Coverage
+
+Crashes
+
+Unique crashes
+
+Triggering field
+
+Crash evidence
+
+Patches
+
+Track:
+
+Original code
+
+Proposed patch
+
+Applied patch
+
+Patch source
+
+Explanation
+
+Related finding
+
+Patch status
+
+Verification Runs
+
+Track:
+
+Original exploit/test result
+
+Patched exploit/test result
+
+Timing re-test
+
+Protocol re-test
+
+ASan result
+
+UBSan result
+
+Regression tests
+
+Overall verification status
+
+Main Overview
+
+Create a VARUNA overview that gives the operator an immediate understanding of the current security state.
+
+Show:
+
+Active analysis
+
+Number of targets
+
+Findings
+
+Critical/high findings
+
+Findings fixed
+
+Pending verification
+
+Recent analysis runs
+
+Current system status
+
+The overview should make the current state understandable within seconds.
+
+Include a clear representation of the analysis pipeline:
+
+TARGET   ↓ CPG   ↓ GNN   ↓ SECURITY ANALYSIS   ↓ FINDING   ↓ PATCH   ↓ RE-VERIFY 
+
+Each stage must display a meaningful state:
+
+Pending
+
+Running
+
+Completed
+
+Failed
+
+Skipped
+
+Do not show fake success states.
+
+Analysis Workspace
+
+Create a dedicated analysis workspace for an individual target.
+
+Show:
+
+Target Information
+
+Target name
+
+Type
+
+Files
+
+Language
+
+Analysis status
+
+Start time
+
+Current stage
+
+Pipeline Progress
+
+Display the current execution stage and progress.
+
+Code Analysis
+
+Show relevant source code with:
+
+File path
+
+Line numbers
+
+Vulnerable/suspicious lines
+
+Function name
+
+GNN score when available
+
+Graph Analysis
+
+Display the relevant Code Property Graph information.
+
+Show:
+
+Nodes
+
+Relationships
+
+Suspicion scores
+
+Important data-flow/control-flow paths
+
+High-priority nodes
+
+The GNN should eventually determine which functions or regions receive deeper analysis.
+
+GNN Prioritization
+
+The GNN is a prioritization layer.
+
+Implement the application architecture so that GraphSAGE can produce:
+
+Node / Function → Suspicion Score 
+
+Example:
+
+parse_input()       0.31 validate_input()    0.18 compare_token()     0.94 process_payload()   0.71 main()              0.11 
+
+The system should use these scores to identify areas requiring deeper analysis.
+
+Do not hardcode the final GNN results into the product architecture.
+
+For the prototype, the GNN module may initially be represented by a service interface/stub, but the architecture must allow the real GraphSAGE implementation to be connected later without rewriting the frontend.
+
+Timing Side-Channel Analysis
+
+Create a dedicated timing analysis workflow.
+
+VARUNA should support:
+
+Selecting a target function
+
+Running timing measurements
+
+Collecting timing distributions
+
+Comparing input groups
+
+Running Welch's t-test
+
+Displaying the statistical result
+
+Flagging potential timing leakage
+
+Applying a patch
+
+Re-running the same timing analysis
+
+Comparing before/after results
+
+Display evidence clearly.
+
+Example:
+
+BEFORE PATCH  Samples: 20,000 t-statistic: 18.42 Status: POTENTIAL LEAKAGE   AFTER PATCH  Samples: 20,000 t-statistic: 1.37 Status: NO SIGNIFICANT LEAKAGE 
+
+Do not invent statistical results.
+
+All values shown in the interface must come from the backend analysis engine or clearly labelled demo data.
+
+Protocol Analysis
+
+Create a dedicated protocol analysis workflow for custom/undocumented binary protocols.
+
+The prototype should support a protocol structure such as:
+
+MAGIC TYPE LENGTH TOKEN PAYLOAD 
+
+Represent protocol fields explicitly.
+
+Support field-aware mutation strategies such as:
+
+Boundary values
+
+Invalid lengths
+
+Oversized lengths
+
+Invalid types
+
+Token mutations
+
+Empty payloads
+
+Oversized payloads
+
+Malformed payloads
+
+Track:
+
+Inputs tested
+
+Mutations
+
+Coverage
+
+Crashes
+
+Unique crashes
+
+Triggering field
+
+Crash input
+
+Crash location
+
+The architecture should later allow LLM-assisted grammar inference instead of relying only on manually defined structures.
+
+Findings
+
+Create a centralized findings system.
+
+Each finding should contain:
+
+Severity
+
+Vulnerability type
+
+CWE where applicable
+
+Target
+
+File
+
+Line
+
+Function
+
+Detection method
+
+GNN score
+
+Evidence
+
+Status
+
+Possible statuses:
+
+Detected Investigating Patch Proposed Patch Applied Verification Pending Verified Rejected 
+
+Users should be able to open a finding and inspect all evidence associated with it.
+
+Patch Generation
+
+Create a patch workflow.
+
+The local AI layer should eventually use a local Mistral-based model through llama.cpp.
+
+The AI should receive focused context rather than the entire codebase unnecessarily.
+
+Relevant context can include:
+
+Vulnerable code
+
+GNN suspicion scores
+
+CPG/data-flow information
+
+Fuzzing evidence
+
+Timing-analysis evidence
+
+Protocol-analysis evidence
+
+The AI should produce:
+
+Vulnerability explanation
+
+Reason for vulnerability
+
+Proposed patch
+
+Explanation of the patch
+
+Represent the patch as a standard code diff.
+
+Do not present AI output as automatically correct.
+
+Every patch must proceed through verification.
+
+Patch Re-Verification
+
+This is one of the most important parts of VARUNA.
+
+After applying a patch:
+
+Run the same security test again.
+
+For timing vulnerabilities:
+
+Original implementation → timing test → leakage detected  Patched implementation → same timing test → compare results 
+
+For protocol vulnerabilities:
+
+Original parser → fuzzing → crash  Patched parser → same/relevant fuzzing campaign → crash signal removed or reduced 
+
+Also run applicable:
+
+ASan
+
+UBSan
+
+Regression tests
+
+Existing unit tests
+
+Show the evidence rather than simply displaying “Fixed.”
+
+Verification Report
+
+Create a clear verification result.
+
+Example:
+
+Original vulnerability       ✓ Reproduced Patch applied                ✓ Original exploit blocked     ✓ Timing analysis              ✓ Protocol fuzzing             ✓ ASan                         ✓ UBSan                        ✓ Regression tests             ✓  OVERALL RESULT PATCH VERIFIED 
+
+Every individual check must show its actual state.
+
+Do not claim formal verification unless an actual formal verification method is implemented.
+
+Use terminology such as:
+
+Automated Patch Validation
+
+Security Re-verification
+
+Evidence-backed Verification
+
+Local AI Status
+
+The application should make the local nature of the AI visible.
+
+Show system status such as:
+
+GNN Engine       READY Local LLM        READY Fuzzer           READY TVLA Engine      READY Protocol Engine  READY Network          OFFLINE 
+
+The application must never expose model/API secrets to the client.
+
+The architecture should support completely local execution of the LLM without requiring external API access.
+
+Reports
+
+Allow users to generate an analysis report containing:
+
+Target
+
+Analysis timestamp
+
+Security findings
+
+GNN prioritization
+
+Timing analysis
+
+Protocol analysis
+
+Evidence
+
+Patch
+
+Verification results
+
+Final status
+
+The report should clearly distinguish:
+
+Detected
+
+Suspected
+
+Verified
+
+Not verified
+
+Never convert an uncertain result into a confirmed vulnerability automatically.
+
+Real-Time Analysis
+
+Security analysis can be long-running.
+
+Do not block the UI while analysis is running.
+
+Use asynchronous analysis jobs.
+
+The frontend should receive status updates through an appropriate mechanism such as:
+
+polling for the initial prototype
+
+WebSockets/SSE for the mature implementation
+
+Users should be able to leave the analysis page and return without losing progress.
+
+Persist analysis state in the database.
+
+State Handling
+
+Every data-driven component must have:
+
+Loading
+
+Use meaningful skeletons.
+
+Empty
+
+Explain what is missing and what the user should do next.
+
+Error
+
+Show a useful error message and retry action.
+
+Running
+
+Show current analysis stage and progress.
+
+Success
+
+Clearly communicate completed actions.
+
+Failed
+
+Show the failed stage and available recovery action.
+
+Never silently fail.
+
+Security
+
+Follow an OWASP Top 10 security mindset.
+
+Implement:
+
+Server-side RBAC
+
+Input validation with Zod
+
+Secure file validation
+
+Secure upload handling
+
+No secrets in client code
+
+Least-privilege access
+
+Safe error messages
+
+Audit logging
+
+Analysis isolation
+
+Secure execution boundaries for uploaded code
+
+Sandboxed execution for fuzzing and compilation
+
+Resource limits for analysis jobs
+
+Uploaded code must never be executed directly inside the main application process.
+
+Treat uploaded source code and binaries as untrusted input.
+
+Performance
+
+The application should feel extremely fast even when analysis is not.
+
+Use:
+
+Server Components wherever possible
+
+Client Components only for interaction
+
+TanStack Query for server state
+
+Appropriate caching
+
+Lazy loading for heavy visualizations
+
+Streaming analysis logs where appropriate
+
+Skeleton loading
+
+Background jobs
+
+Efficient graph rendering
+
+Pagination for large datasets
+
+Do not render enormous CPG graphs unnecessarily.
+
+Load detailed graph information progressively.
+
+Required Prototype Deliverables
+
+Build a complete working VARUNA application scaffold containing:
+
+Core
+
+Dashboard shell
+
+Persistent navigation
+
+Overview
+
+Analysis workspace
+
+Findings
+
+Timing analysis
+
+Protocol analysis
+
+Patch workflow
+
+Verification workflow
+
+Reports
+
+Working Prototype Features
+
+Upload a test C/C++ target
+
+Create an analysis run
+
+Run timing analysis
+
+Display Welch's t-test result
+
+Display timing distribution
+
+Run protocol mutation tests
+
+Display fuzzing statistics
+
+Display findings
+
+Show patch diff
+
+Run re-verification
+
+Show before/after evidence
+
+Architecture Ready For
+
+Joern
+
+Code Property Graph
+
+GraphSAGE
+
+AFL++
+
+Mistral-7B
+
+llama.cpp
+
+ASan
+
+UBSan
+
+FastAPI/backend analysis services
+
+The prototype should allow these components to be integrated incrementally without requiring a frontend rewrite.
+
+Important Product Rules
+
+Do not create fake AI functionality.
+
+Do not fabricate vulnerability results.
+
+Do not fabricate GNN scores and present them as real model output.
+
+Clearly label prototype/demo data.
+
+Keep security analysis results evidence-driven.
+
+Keep the UI focused on decisions and evidence.
+
+Make the system architecture modular.
+
+Do not tightly couple the dashboard to a specific ML model.
+
+Treat every uploaded target as untrusted.
+
+Prioritize a genuinely working security-analysis prototype over decorative functionality.
+
+The final application should feel like a serious cybersecurity analysis and remediation platform that can evolve from a prototype into the full VARUNA system.
+
+Use the provided reference image as the visual source of truth and focus entirely on implementing the product functionality and architecture around it.

@@ -1,0 +1,1 @@
+- [API codegen compatibility](api-codegen-compat.md) — avoid OpenAPI integer formats until the generated Zod helper matches the installed runtime.
