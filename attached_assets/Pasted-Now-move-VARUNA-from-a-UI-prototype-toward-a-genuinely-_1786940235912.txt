@@ -1,0 +1,255 @@
+Now move VARUNA from a UI prototype toward a genuinely functional security-analysis prototype.
+
+DO NOT redesign the UI.
+DO NOT change the existing visual language, routes, navigation, or dashboard structure unless absolutely necessary.
+DO NOT remove existing functionality.
+DO NOT fabricate security results.
+
+The next priority is to implement the REAL TVLA timing side-channel detection engine.
+
+## GOAL
+
+Make the existing "Timing Channels" module execute a real timing side-channel experiment against a deliberately vulnerable C function and return real measurements to the existing VARUNA UI.
+
+The flow should be:
+
+C target
+→ compile
+→ timing harness
+→ collect timing samples
+→ compare two input groups
+→ Welch's t-test
+→ determine result
+→ send real result to VARUNA API
+→ display it in the existing Timing Channels page.
+
+## 1. Create a controlled vulnerable C target
+
+Create a small self-contained C example demonstrating a non-constant-time secret/token comparison.
+
+Use an intentionally early-exit comparison so that different inputs can produce measurable timing differences.
+
+Keep this target isolated inside a dedicated prototype/demo target directory.
+
+Example concept:
+
+secret/token
+→ compare character by character
+→ return immediately on mismatch
+
+DO NOT use a real password, credential, or external target.
+
+## 2. Create a timing harness
+
+Implement a real timing harness that:
+
+- executes the vulnerable function repeatedly
+- measures execution time using a high-resolution monotonic timer
+- creates two clearly defined input groups
+- collects thousands of measurements
+- outputs raw timing samples
+- records sample count
+- records mean/median where useful
+- records variance/std deviation where useful
+
+Make the number of samples configurable.
+
+Start with approximately 10,000 samples per group, but make this configurable through the API.
+
+The harness must produce real measurements, not seeded/random demo values.
+
+## 3. Welch's t-test
+
+Implement the statistical analysis using Python and scipy.stats.ttest_ind or an equivalent correct implementation.
+
+Use Welch's version rather than assuming equal variance.
+
+Return at minimum:
+
+- sample count for group A
+- sample count for group B
+- mean timing A
+- mean timing B
+- t-statistic
+- p-value
+- configured threshold
+- interpretation/status
+
+Possible states:
+
+- LEAKAGE_DETECTED
+- NO_SIGNIFICANT_LEAKAGE
+- INCONCLUSIVE
+- NOT_RUN
+- ERROR
+
+Do NOT hardcode a threshold without documenting it.
+
+Make the threshold configurable.
+
+## 4. Handle real-world timing noise
+
+Do not assume the timing difference will automatically be obvious.
+
+The experiment should account for:
+
+- system scheduling noise
+- compiler optimization
+- CPU frequency changes
+- measurement overhead
+
+Compile the vulnerable target appropriately so the intended early-exit behaviour remains observable.
+
+If the first implementation produces unreliable statistical separation, improve the experimental harness rather than fabricating a stronger t-statistic.
+
+The goal is reproducibility.
+
+## 5. Connect it to the existing VARUNA API
+
+Find the current typed prototype API used by the Timing Channels page.
+
+Replace the seeded timing-analysis response with a real backend call.
+
+The existing frontend should continue to work with the same general data model.
+
+Add a backend/service layer such as:
+
+timing-analysis service
+→ C target runner
+→ timing harness
+→ statistical analysis
+→ normalized VARUNA result
+
+Keep the security-analysis logic separated from UI code.
+
+## 6. Store the analysis result
+
+Persist the result using the existing database/data layer if one already exists.
+
+Store:
+
+- target
+- function
+- timestamp
+- sample count
+- group statistics
+- t-statistic
+- p-value
+- threshold
+- result status
+- raw/derived evidence location
+- execution duration
+
+Do not unnecessarily rewrite the existing schema.
+
+Create a migration if required.
+
+## 7. Timing visualization
+
+Use the EXISTING Timing Channels UI.
+
+Do not redesign it.
+
+Connect the real backend data to:
+
+- sample counts
+- t-statistic
+- p-value
+- timing distributions
+- detection status
+
+If a chart already exists, feed it real timing samples.
+
+If the existing chart is insufficient, make the smallest necessary change.
+
+## 8. Evidence-first result
+
+Every result should contain an evidence record.
+
+Example:
+
+Timing Side-Channel
+Target: demo_auth.c
+Function: compare_token()
+Samples: 10,000 + 10,000
+Welch t-statistic: [REAL VALUE]
+p-value: [REAL VALUE]
+Status: [REAL RESULT]
+
+The UI should clearly distinguish measured evidence from explanatory text.
+
+## 9. Add a reproducible CLI/test command
+
+Create an easy command such as:
+
+npm run test:tvla
+
+or the appropriate project command.
+
+It should run the complete experiment from scratch and print a concise result.
+
+Also add a Python/unit test for the statistical calculation using known synthetic distributions so we can verify that the Welch t-test implementation itself is correct.
+
+## 10. Security
+
+Treat C source and compiled targets as untrusted.
+
+For this prototype, only execute the bundled controlled demo target.
+
+Do NOT create an arbitrary code execution endpoint where users can upload C/C++ and execute it directly on the application server.
+
+Keep execution isolated and clearly marked as prototype/demo infrastructure.
+
+## 11. Important architecture rule
+
+Do NOT remove the existing adapters/interfaces for:
+
+- GNN
+- Local LLM
+- Fuzzer
+- TVLA
+- Patch engine
+- Verification
+
+We will connect the other real engines later.
+
+For now:
+
+TVLA = REAL
+
+GNN = adapter/prototype
+
+Local LLM = adapter/prototype
+
+Protocol Fuzzer = prototype
+
+Patch/Re-verification = next integration stage
+
+Make the architecture modular so these can be replaced independently.
+
+## 12. Final acceptance criteria
+
+Do not tell me this is complete until I can:
+
+1. Open VARUNA.
+2. Go to Timing Channels.
+3. Select the bundled vulnerable demo target.
+4. Start a timing analysis.
+5. Wait for the real experiment to finish.
+6. See real sample counts.
+7. See a real Welch's t-statistic and p-value.
+8. See the actual timing distribution.
+9. See a defensible leakage/no-leakage/inconclusive result.
+10. Refresh the page and still see the persisted analysis result.
+11. Run the same experiment from the CLI/test command.
+
+At the end, give me:
+
+- files created/modified
+- commands to run
+- how the timing experiment works
+- how the statistical result is calculated
+- what is REAL versus still prototype/stub
+- any limitations or reproducibility issues encountered
+
+Again: prioritize REAL functionality over UI changes.
