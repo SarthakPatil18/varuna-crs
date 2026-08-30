@@ -15,7 +15,7 @@ import {
   useCreateProject, useCreateProtocolTest, useCreateReport, useCreateTimingTest,
   useGetFinding, useGetOverview, useHealthCheck, useListAnalysisRuns,
   useListFindings, useListPatches, useListProjects, useListProtocolTests,
-  useListReports, useListTimingTests, useVerifyPatch,
+  useListReports, useListTimingTests, useVerifyPatch, setBaseUrl,
 } from '@workspace/api-client-react';
 import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/error-boundary';
@@ -25,6 +25,11 @@ import NotFound from '@/pages/not-found';
 import { Link, Route, Switch, Router as WouterRouter, useLocation, useParams } from 'wouter';
 
 const queryClient = new QueryClient();
+
+const apiBase = import.meta.env.VITE_API_URL || '';
+if (apiBase) {
+  setBaseUrl(apiBase);
+}
 
 const nav = [
   {
