@@ -1,10 +1,12 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle, Activity, ArrowUpRight, Binary, Check, ChevronRight, Clock3,
-  Code2, Cpu, Download, FileCode2, FileText, FolderKanban, GitBranch,
+  AlertTriangle, Activity, Binary, Check, ChevronRight, Clock3,
+  Code2, Cpu, Download, FileCode2, FileText, GitBranch,
   LayoutDashboard, Menu, Network, Play, Plus, Radar, RotateCw, Search, Shield,
   ShieldCheck, SlidersHorizontal, Sparkles, TestTube2, UploadCloud, Wrench, Zap,
+  Terminal, Lock, Database, Radio, X, ArrowRight, AlertCircle, CheckCircle2,
+  Eye, ChevronDown,
 } from 'lucide-react';
 import {
   getGetOverviewQueryKey, getListAnalysisRunsQueryKey, getListFindingsQueryKey,
@@ -23,544 +25,1546 @@ import NotFound from '@/pages/not-found';
 import { Link, Route, Switch, Router as WouterRouter, useLocation, useParams } from 'wouter';
 
 const queryClient = new QueryClient();
+
 const nav = [
-  { href: '/overview', label: 'Overview', icon: LayoutDashboard },
-  { href: '/analysis', label: 'Analysis workspace', icon: Radar },
-  { href: '/timing', label: 'Timing channels', icon: Clock3 },
-  { href: '/protocol', label: 'Protocol fuzzing', icon: Binary },
-  { href: '/findings', label: 'Findings', icon: AlertTriangle },
-  { href: '/patches', label: 'Patch review', icon: GitBranch },
-  { href: '/verification', label: 'Re-verification', icon: ShieldCheck },
-  { href: '/reports', label: 'Reports', icon: FileText },
+  {
+    section: 'OPERATIONS',
+    items: [
+      { href: '/overview',      label: 'Overview',           icon: LayoutDashboard },
+      { href: '/analysis',      label: 'Analysis Workspace', icon: Radar },
+      { href: '/findings',      label: 'Findings',           icon: AlertTriangle },
+    ],
+  },
+  {
+    section: 'ANALYSIS',
+    items: [
+      { href: '/timing',        label: 'Timing Channels',    icon: Clock3 },
+      { href: '/protocol',      label: 'Protocol Fuzzing',   icon: Binary },
+    ],
+  },
+  {
+    section: 'VERIFICATION',
+    items: [
+      { href: '/patches',       label: 'Patch Review',       icon: GitBranch },
+      { href: '/verification',  label: 'Re-Verification',    icon: ShieldCheck },
+      { href: '/reports',       label: 'Reports',            icon: FileText },
+    ],
+  },
 ];
+
 const modules = ['cpg', 'gnn', 'timing', 'protocol', 'asan', 'ubsan'];
+
 const cx = (...values: Array<string | false | null | undefined>) => values.filter(Boolean).join(' ');
 const title = (value: string) => value.replaceAll('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-const fmt = (value?: string | number | null) => value == null ? '—' : typeof value === 'number' ? value.toLocaleString() : value;
+const fmt = (value?: string | number | null) =>
+  value == null ? '—' : typeof value === 'number' ? value.toLocaleString() : value;
 
-function StatusPill({ value, tone }: { value?: string; tone?: 'green' | 'amber' | 'red' | 'slate' }) {
-  const inferred = tone ?? (value?.includes('fail') || value?.includes('critical') ? 'red' : value?.includes('pending') || value?.includes('running') || value?.includes('queued') ? 'amber' : 'green');
-  return <span data-testid={`status-${value ?? 'unknown'}`} className={cx('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.12em]', inferred === 'green' && 'bg-[#ECFDF5] text-[#0F5132]', inferred === 'amber' && 'bg-[#FFF9E6] text-[#B27B18]', inferred === 'red' && 'bg-[#FFF1F2] text-[#E11D48]', inferred === 'slate' && 'bg-[#F1F5F9] text-[#64748B]')}><span className={cx('h-1.5 w-1.5 rounded-full', inferred === 'green' && 'bg-[#10B981]', inferred === 'amber' && 'bg-[#F59E0B]', inferred === 'red' && 'bg-[#E11D48]', inferred === 'slate' && 'bg-[#64748B]')} />{title(value ?? 'unknown')}</span>;
+/* ────────────────────────────────────────────────────────────
+   STATUS BADGE
+   Tactical severity/state badges with sharp corners
+   ──────────────────────────────────────────────────────────── */
+function StatusBadge({ value, tone }: { value?: string; tone?: string }) {
+  const v = value?.toLowerCase() ?? 'unknown';
+  const cls =
+    v.includes('critical')           ? 'badge badge--critical'         :
+    v.includes('high')               ? 'badge badge--high'             :
+    v.includes('medium')             ? 'badge badge--medium'           :
+    v.includes('low')                ? 'badge badge--low'              :
+    v.includes('fail')               ? 'badge badge--failed'           :
+    v.includes('error')              ? 'badge badge--failed'           :
+    v.includes('interrupted')        ? 'badge badge--failed'           :
+    v.includes('potential_leakage')  ? 'badge badge--potential_leakage':
+    v.includes('no_leakage')         ? 'badge badge--no_leakage'       :
+    v.includes('verified')           ? 'badge badge--verified'         :
+    v.includes('complete')           ? 'badge badge--complete'         :
+    v.includes('running')            ? 'badge badge--running'          :
+    v.includes('analyzing')          ? 'badge badge--analyzing'        :
+    v.includes('queued')             ? 'badge badge--queued'           :
+    v.includes('pending')            ? 'badge badge--pending'          :
+    v.includes('pass')               ? 'badge badge--pass'             :
+    v.includes('active')             ? 'badge badge--analyzing'        :
+    'badge badge--pending';
+
+  const dot =
+    v.includes('running') || v.includes('analyzing') || v.includes('active')
+      ? <span className="status-dot status-dot--active" />
+      : v.includes('complete') || v.includes('verified') || v.includes('no_leakage') || v.includes('pass')
+      ? <span className="status-dot status-dot--ok" />
+      : v.includes('critical') || v.includes('fail') || v.includes('error') || v.includes('potential_leakage')
+      ? <span className="status-dot status-dot--crit" />
+      : v.includes('high') || v.includes('warn')
+      ? <span className="status-dot status-dot--warn" />
+      : null;
+
+  return (
+    <span data-testid={`status-${value ?? 'unknown'}`} className={cls}>
+      {dot}
+      {(value ?? 'unknown').replace(/_/g, ' ').toUpperCase()}
+    </span>
+  );
 }
 
+/* ────────────────────────────────────────────────────────────
+   UTC CLOCK
+   ──────────────────────────────────────────────────────────── */
+function UtcClock() {
+  const [utc, setUtc] = useState('');
+  useEffect(() => {
+    const tick = () => {
+      const d = new Date();
+      setUtc(
+        `${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}:${String(d.getUTCSeconds()).padStart(2,'0')}`
+      );
+    };
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, []);
+  return <span className="mono-value" style={{ color: 'var(--text-tertiary)', fontSize: 10 }}>{utc} UTC</span>;
+}
+
+/* ────────────────────────────────────────────────────────────
+   LOADING STATE — Operational language
+   ──────────────────────────────────────────────────────────── */
+function Loading({ label = 'INITIALIZING' }: { label?: string }) {
+  return (
+    <div data-testid="status-loading" style={{ padding: '24px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <span className="status-dot status-dot--active" />
+        <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 10, letterSpacing: '0.12em', color: 'var(--accent-amber)' }}>
+          {label}...
+        </span>
+      </div>
+      {[1,2,3].map(n => (
+        <div key={n} style={{ height: 32, background: 'var(--surface-1)', borderRadius: 2, marginBottom: 6, animation: 'pulse-soft 1.8s ease-in-out infinite', animationDelay: `${n * 0.12}s` }} />
+      ))}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   ERROR STATE — System alert style
+   ──────────────────────────────────────────────────────────── */
+function ErrorState({ retry }: { retry?: () => void }) {
+  return (
+    <div data-testid="status-error" className="op-panel" style={{ padding: 16, borderColor: 'rgba(183,53,53,.4)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+        <AlertCircle size={13} color="var(--status-critical)" />
+        <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--status-critical)' }}>
+          OPERATION INTERRUPTED
+        </span>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: retry ? 12 : 0 }}>
+        TARGET UNAVAILABLE · Evidence service could not be reached. Retry when the API server is operational.
+      </div>
+      {retry && (
+        <button onClick={retry} data-testid="button-retry" className="btn-secondary" style={{ fontSize: 10 }}>
+          <RotateCw size={11} /> RETRY OPERATION
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   EMPTY STATE — Operational language
+   ──────────────────────────────────────────────────────────── */
+function Empty({ label, action }: { label: string; action?: ReactNode }) {
+  return (
+    <div data-testid="status-empty" style={{ padding: '32px 16px', textAlign: 'center', borderTop: '1px solid var(--border-subtle)' }}>
+      <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--text-tertiary)', marginBottom: 6 }}>
+        NO ACTIVE {label.toUpperCase()}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>No recorded evidence available for this surface.</div>
+      {action && <div style={{ marginTop: 14 }}>{action}</div>}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   SECTION HEADER — Military panel label
+   ──────────────────────────────────────────────────────────── */
+function SectionLabel({ label, meta, id }: { label: string; meta?: ReactNode; id?: string }) {
+  return (
+    <div className="op-panel-header">
+      <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+        {label}
+      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {meta}
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   MINI BAR — Progress indicator
+   ──────────────────────────────────────────────────────────── */
+function MiniBar({ value, color }: { value: number; color?: string }) {
+  return (
+    <div className="mini-bar-track" style={{ width: '100%' }}>
+      <div className="mini-bar-fill" style={{ width: `${Math.max(2, Math.min(value, 100))}%`, background: color ?? 'var(--accent-olive)' }} />
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   METRIC STRIP — Compact KPI display
+   ──────────────────────────────────────────────────────────── */
+function MetricItem({ label, value, sub, tone }: { label: string; value: ReactNode; sub?: string; tone?: 'critical' | 'warn' | 'ok' | 'amber' }) {
+  const color =
+    tone === 'critical' ? 'var(--status-critical)' :
+    tone === 'warn'     ? 'var(--status-warning)' :
+    tone === 'ok'       ? 'var(--status-success)' :
+    tone === 'amber'    ? 'var(--accent-amber)' :
+    'var(--text-primary)';
+  return (
+    <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 4 }}>
+        {label}
+      </div>
+      <div data-testid={`value-${label.toLowerCase().replaceAll(' ', '-')}`}
+        style={{ fontFamily: 'var(--app-font-mono)', fontSize: 22, fontWeight: 700, color, lineHeight: 1.1 }}>
+        {fmt(value as string | number)}
+      </div>
+      {sub && <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   SHELL — Main layout: command bar + sidebar + content
+   ──────────────────────────────────────────────────────────── */
 function Shell({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const health = useHealthCheck();
-  return <div className="noise min-h-[100dvh] bg-[#F4F7F5] text-[#0F5132] font-sans">
-    <aside className={cx('fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col border-r border-[#E5EAE7] bg-[#F8FAF9] px-5 py-6 transition-transform md:translate-x-0', mobileOpen ? 'translate-x-0' : '-translate-x-full')}>
-      <div className="flex items-center gap-3 px-2 pb-8">
-        <div className="grid h-10 w-10 place-items-center rounded-[13px] bg-[#0F5132] text-[#F4F7F5] shadow-[0_4px_12px_rgba(15,81,50,.15)]"><Shield size={21} strokeWidth={2.5} /></div>
-        <div><div className="font-mono text-[17px] font-bold tracking-[.12em] text-[#0F5132]">VARUNA</div><div className="text-[9px] font-bold uppercase tracking-[.16em] text-[#6e7d74]">Security console</div></div>
-      </div>
-      <div className="mb-3 px-2 text-[10px] font-bold uppercase tracking-[.16em] text-[#6e7d74]">Workspace</div>
-      <nav className="space-y-1">
-        {nav.map(({ href, label, icon: Icon }) => <Link key={href} href={href} onClick={() => setMobileOpen(false)} data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`} className={cx('group flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-all', location === href ? 'bg-[#EAF2ED] text-[#0F5132]' : 'text-[#74827b] hover:bg-[#EAF2ED]/50 hover:text-[#0F5132]')}><Icon size={17} strokeWidth={location === href ? 2.3 : 1.8} /><span>{label}</span>{location === href && <ChevronRight size={14} className="ml-auto text-[#0F5132]" />}</Link>)}
-      </nav>
-      <div className="mb-3 mt-8 px-2 text-[10px] font-bold uppercase tracking-[.16em] text-[#6e7d74]">System</div>
-      <Link href="/overview" data-testid="link-system-health" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-[#74827b] hover:bg-[#EAF2ED]/50 hover:text-[#0F5132] transition-all"><Cpu size={17} /><span>Engine health</span><span className={cx('ml-auto h-2 w-2 rounded-full', health.isError ? 'bg-[#E11D48]' : 'bg-[#10B981]')} /></Link>
-      <div className="mt-auto rounded-2xl bg-[#0F5132] p-4 text-[#F4F7F5] shadow-sm">
-        <div className="mb-3 flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-[.14em] text-[#A6CDB8]">Operator mode</span><Activity size={15} className="text-[#F59E0B]" /></div>
-        <div className="text-sm font-semibold">Evidence first</div><p className="mt-1 text-[11px] leading-relaxed text-[#A6CDB8]">Every signal stays traceable from target to verification.</p>
-        <div className="mt-4 flex items-center gap-2 text-[10px] text-[#A6CDB8]"><span className="h-1.5 w-1.5 rounded-full bg-[#F59E0B]" />Prototype environment</div>
-      </div>
-    </aside>
-    {mobileOpen && <button aria-label="Close navigation" data-testid="button-close-navigation" onClick={() => setMobileOpen(false)} className="fixed inset-0 z-30 bg-[#0F5132]/10 md:hidden" />}
-    <main className="min-h-[100dvh] md:pl-[260px]">
-      <header className="sticky top-0 z-20 flex h-[72px] items-center gap-4 border-b border-[#E5EAE7] bg-[#F4F7F5]/90 px-5 backdrop-blur-md md:px-10">
-        <button onClick={() => setMobileOpen(true)} data-testid="button-open-navigation" className="rounded-lg p-2 text-[#718078] hover:bg-white md:hidden"><Menu size={20} /></button>
-        <div className="relative max-w-[380px] flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6e7d74]" size={16} /><input data-testid="input-global-search" placeholder="Search findings, targets, runs" className="h-10 w-full rounded-xl border border-[#E5EAE7] bg-white pl-10 pr-4 text-xs outline-none placeholder:text-[#a6b1ab] focus:border-[#0F5132] shadow-2xs focus:shadow-sm" /></div>
-        <div className="hidden items-center gap-2 sm:flex"><div className="flex items-center gap-2 rounded-full border border-[#E5EAE7] bg-white px-3 py-2 text-[11px] text-[#6e7d74]"><span className={cx('h-2 w-2 rounded-full', health.isError ? 'bg-[#E11D48]' : 'bg-[#10B981]')} />Engine {health.isError ? 'unavailable' : 'connected'}</div><div className="grid h-9 w-9 place-items-center rounded-full bg-[#EAF2ED] text-xs font-bold text-[#0F5132]">SE</div></div>
+
+  const activeLabel = nav.flatMap(g => g.items).find(i => i.href === location)?.label ?? 'OVERVIEW';
+
+  return (
+    <div
+      className="op-grid noise"
+      style={{ minHeight: '100dvh', background: 'var(--bg-primary)', color: 'var(--text-primary)', display: 'flex', flexDirection: 'column' }}
+    >
+      {/* ── COMMAND BAR ── */}
+      <header style={{
+        height: 52,
+        borderBottom: '1px solid var(--border-subtle)',
+        background: 'var(--bg-secondary)',
+        display: 'flex',
+        alignItems: 'center',
+        padding: '0 16px',
+        gap: 0,
+        position: 'sticky',
+        top: 0,
+        zIndex: 50,
+        flexShrink: 0,
+      }}>
+        {/* Left: Brand */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 240, flexShrink: 0 }}>
+          <div style={{ width: 28, height: 28, border: '1px solid var(--accent-olive)', borderRadius: 2, display: 'grid', placeItems: 'center' }}>
+            <Shield size={14} color="var(--accent-olive)" strokeWidth={2} />
+          </div>
+          <div>
+            <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 13, fontWeight: 700, letterSpacing: '0.18em', color: 'var(--text-primary)', lineHeight: 1 }}>
+              ◆ VARUNA
+            </div>
+            <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 8, letterSpacing: '0.18em', color: 'var(--text-tertiary)', textTransform: 'uppercase', lineHeight: 1, marginTop: 2 }}>
+              CYBER OPERATIONS
+            </div>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, height: 28, background: 'var(--border-subtle)', flexShrink: 0 }} />
+
+        {/* Center: Context */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
+          <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-tertiary)' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>SYSTEM</span>
+            <span style={{ margin: '0 6px', color: 'var(--border-medium)' }}>·</span>
+            VARUNA-CRS
+          </div>
+          <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-tertiary)' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>BUILD</span>
+            <span style={{ margin: '0 6px', color: 'var(--border-medium)' }}>·</span>
+            v2.4.1
+          </div>
+          <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, letterSpacing: '0.12em', color: 'var(--text-tertiary)' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>SURFACE</span>
+            <span style={{ margin: '0 6px', color: 'var(--border-medium)' }}>·</span>
+            {activeLabel.toUpperCase()}
+          </div>
+        </div>
+
+        {/* Right: Status */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span
+              className={health.isError ? '' : 'animate-blink'}
+              style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: health.isError ? 'var(--status-critical)' : 'var(--status-success)' }}
+            />
+            <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: health.isError ? 'var(--status-critical)' : 'var(--status-success)' }}>
+              {health.isError ? 'OFFLINE' : 'OPERATIONAL'}
+            </span>
+          </div>
+          <div style={{ width: 1, height: 20, background: 'var(--border-subtle)' }} />
+          <UtcClock />
+          {/* Mobile toggle */}
+          <button
+            onClick={() => setMobileOpen(true)}
+            data-testid="button-open-navigation"
+            style={{ display: 'none', padding: 4, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer' }}
+            className="md-menu-btn"
+          >
+            <Menu size={18} />
+          </button>
+        </div>
       </header>
-      <div className="mx-auto max-w-[1480px] p-5 md:p-10">{children}</div>
-    </main>
-  </div>;
+
+      {/* ── BODY ── */}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        {/* ── SIDEBAR ── */}
+        <aside style={{
+          width: 240,
+          background: 'var(--bg-secondary)',
+          borderRight: '1px solid var(--border-subtle)',
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '16px 0',
+          flexShrink: 0,
+          overflowY: 'auto',
+          position: 'sticky',
+          top: 52,
+          height: 'calc(100dvh - 52px)',
+        }}>
+          {nav.map(group => (
+            <div key={group.section} style={{ marginBottom: 4 }}>
+              {/* Section label */}
+              <div style={{ padding: '6px 16px 4px', fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--app-font-mono)' }}>
+                {group.section}
+              </div>
+              <nav>
+                {group.items.map(({ href, label, icon: Icon }) => {
+                  const active = location === href;
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={() => setMobileOpen(false)}
+                      data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 9,
+                        padding: '7px 16px 7px 13px',
+                        marginLeft: 0,
+                        borderLeft: active ? '2px solid var(--accent-olive)' : '2px solid transparent',
+                        background: active ? 'rgba(124,128,80,.07)' : 'transparent',
+                        color: active ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                        fontSize: 11,
+                        fontWeight: active ? 600 : 400,
+                        textDecoration: 'none',
+                        transition: 'all .15s ease',
+                        letterSpacing: '0.03em',
+                      }}
+                      onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLElement).style.color = 'var(--text-secondary)'; (e.currentTarget as HTMLElement).style.background = 'rgba(124,128,80,.04)'; } }}
+                      onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLElement).style.color = 'var(--text-tertiary)'; (e.currentTarget as HTMLElement).style.background = 'transparent'; } }}
+                    >
+                      <Icon size={13} strokeWidth={active ? 2.2 : 1.6} />
+                      <span>{label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+              <div style={{ height: 1, background: 'var(--border-subtle)', margin: '8px 0' }} />
+            </div>
+          ))}
+
+          {/* System health */}
+          <div style={{ padding: '6px 16px 4px', fontSize: 9, fontWeight: 700, letterSpacing: '0.16em', color: 'var(--text-tertiary)', textTransform: 'uppercase', fontFamily: 'var(--app-font-mono)' }}>
+            SYSTEM
+          </div>
+          <Link
+            href="/overview"
+            data-testid="link-system-health"
+            style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 16px 7px 13px', borderLeft: '2px solid transparent', color: 'var(--text-tertiary)', fontSize: 11, textDecoration: 'none' }}
+          >
+            <Cpu size={13} strokeWidth={1.6} />
+            <span>Engine Health</span>
+            <span
+              style={{ marginLeft: 'auto', display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: health.isError ? 'var(--status-critical)' : 'var(--status-success)', flexShrink: 0 }}
+            />
+          </Link>
+
+          {/* Operator mode note */}
+          <div style={{ margin: 'auto 12px 12px', padding: '10px 12px', border: '1px solid var(--border-subtle)', borderRadius: 3, background: 'var(--surface-1)' }}>
+            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 4 }}>
+              PROTOTYPE ENV
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.5 }}>
+              Evidence-first. Every signal stays traceable from target to verification.
+            </div>
+          </div>
+        </aside>
+
+        {/* ── MAIN CONTENT ── */}
+        <main style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', minWidth: 0 }}>
+          {children}
+        </main>
+      </div>
+    </div>
+  );
 }
 
-function Header({ eyebrow, heading, sub, action }: { eyebrow: string; heading: string; sub: string; action?: ReactNode }) {
-  return <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.2em] text-[#0F5132]"><span className="h-1.5 w-1.5 rounded-full bg-[#0F5132]" />{eyebrow}</div><h1 data-testid={`heading-${heading.toLowerCase().replaceAll(' ', '-')}`} className="text-3xl font-extrabold tracking-tight text-gray-900 md:text-4xl">{heading}</h1><p className="mt-2 max-w-2xl text-xs text-[#6e7d74]">{sub}</p></div>{action}</div>;
+/* ────────────────────────────────────────────────────────────
+   PAGE HEADER — Operational briefing header
+   ──────────────────────────────────────────────────────────── */
+function PageHeader({ eyebrow, heading, sub, action }: { eyebrow: string; heading: string; sub: string; action?: ReactNode }) {
+  return (
+    <div style={{ marginBottom: 20, paddingBottom: 16, borderBottom: '1px solid var(--border-subtle)' }}>
+      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: 'var(--app-font-mono)', marginBottom: 6 }}>
+        {eyebrow}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 }}>
+        <div>
+          <h1
+            data-testid={`heading-${heading.toLowerCase().replaceAll(' ', '-')}`}
+            style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.01em', margin: 0, lineHeight: 1.2 }}
+          >
+            {heading}
+          </h1>
+          <p style={{ marginTop: 4, fontSize: 11, color: 'var(--text-tertiary)', maxWidth: 640, lineHeight: 1.5 }}>{sub}</p>
+        </div>
+        {action}
+      </div>
+    </div>
+  );
 }
-function Section({ title: sectionTitle, meta, children, className }: { title: string; meta?: ReactNode; children: ReactNode; className?: string }) {
-  return <section className={cx('rounded-2xl border border-[#E5EAE7] bg-white p-5 shadow-2xs md:p-6', className)}><div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-sm font-bold tracking-tight text-gray-900">{sectionTitle}</h2>{meta}</div>{children}</section>;
-}
-function Loading({ label = 'Reading evidence' }: { label?: string }) { return <div data-testid="status-loading" className="space-y-3">{[1, 2, 3].map((n) => <div key={n} className="h-12 animate-pulse rounded-xl bg-[#EAF2ED]" />)}<div className="pt-1 text-[11px] font-mono text-[#8a9b91]">{label}...</div></div>; }
-function ErrorState({ retry }: { retry?: () => void }) { return <div data-testid="status-error" className="rounded-xl border border-[#f0d4cf] bg-[#fff6f3] p-5 text-sm text-[#9a4035]"><div className="flex items-center gap-2 font-bold"><AlertTriangle size={16} />Evidence service unavailable</div><p className="mt-1 text-xs text-[#af6b60]">The console could not read this surface. Retry when the API server is available.</p>{retry && <Button onClick={retry} data-testid="button-retry" variant="outline" size="sm" className="mt-3">Retry</Button>}</div>; }
-function Empty({ label, action }: { label: string; action?: ReactNode }) { return <div data-testid="status-empty" className="rounded-xl border border-dashed border-[#E5EAE7] bg-[#F8FAF9] p-8 text-center"><div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-xl bg-[#EAF2ED] text-[#0F5132]"><FolderKanban size={18} /></div><div className="text-sm font-bold text-gray-900">{label}</div><p className="mt-1 text-xs text-[#6e7d74]">No recorded evidence is available yet.</p>{action}</div>; }
-function Stat({ label, value, hint, accent }: { label: string; value: ReactNode; hint: string; accent?: boolean }) { return <div className={cx('rounded-2xl border p-5 transition-all shadow-2xs hover:shadow-md', accent ? 'border-[#0F5132] bg-[#0F5132] text-white' : 'border-[#E5EAE7] bg-white text-gray-900')}><div className={cx('text-[10px] font-bold uppercase tracking-[.15em]', accent ? 'text-[#A6CDB8]' : 'text-[#6e7d74]')}>{label}</div><div data-testid={`value-${label.toLowerCase().replaceAll(' ', '-')}`} className="mt-3 font-mono text-3xl font-bold tracking-tight">{fmt(value as string | number)}</div><div className={cx('mt-2 text-[11px]', accent ? 'text-[#A6CDB8]' : 'text-[#6e7d74]')}>{hint}</div></div>; }
-function MiniBar({ value }: { value: number }) { return <div className="h-1.5 overflow-hidden rounded-full bg-[#E5EAE7]"><div className="h-full rounded-full bg-[#10B981]" style={{ width: `${Math.max(3, Math.min(value, 100))}%` }} /></div>; }
 
+/* ────────────────────────────────────────────────────────────
+   OP PANEL — Standard panel wrapper
+   ──────────────────────────────────────────────────────────── */
+function Panel({
+  title: panelTitle,
+  meta,
+  children,
+  style: panelStyle,
+}: {
+  title: string;
+  meta?: ReactNode;
+  children: ReactNode;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div className="op-panel" style={panelStyle}>
+      <SectionLabel label={panelTitle} meta={meta} />
+      <div style={{ padding: '14px' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   ANALYSIS RUNS TABLE
+   ──────────────────────────────────────────────────────────── */
+function Runs({ runs }: { runs: any[] }) {
+  if (!runs.length) {
+    return (
+      <Empty
+        label="analysis runs"
+        action={
+          <Link href="/analysis" data-testid="link-empty-start-analysis" className="btn-secondary" style={{ fontSize: 10, display: 'inline-flex', gap: 6 }}>
+            <Plus size={11} /> REGISTER TARGET
+          </Link>
+        }
+      />
+    );
+  }
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table className="op-table" style={{ minWidth: 560 }}>
+        <thead>
+          <tr>
+            <th>TARGET</th>
+            <th>STAGE</th>
+            <th>UPDATED</th>
+            <th>PROGRESS</th>
+            <th>STATE</th>
+          </tr>
+        </thead>
+        <tbody>
+          {runs.map((run: any) => (
+            <tr key={run.id} data-testid={`row-run-${run.id}`}>
+              <td>
+                <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 11, color: 'var(--text-primary)', fontWeight: 600 }}>{run.projectName}</div>
+                <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)', marginTop: 2 }}>{run.id}</div>
+              </td>
+              <td style={{ fontFamily: 'var(--app-font-mono)', fontSize: 10 }}>{title(run.currentStage ?? '—')}</td>
+              <td style={{ fontFamily: 'var(--app-font-mono)', fontSize: 10 }}>
+                {run.updatedAt ? new Date(run.updatedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+              </td>
+              <td>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 80 }}>
+                  <div style={{ flex: 1 }}><MiniBar value={run.progress ?? 0} /></div>
+                  <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{run.progress ?? 0}%</span>
+                </div>
+              </td>
+              <td><StatusBadge value={run.status} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   STAGE META MAP
+   ──────────────────────────────────────────────────────────── */
+const stageMeta: Record<string, { title: string; subtitle: string; icon: any; time: string }> = {
+  target:   { title: 'TARGET INGESTION',    subtitle: 'Source/binary intake & AST normalisation',     icon: FileCode2,  time: '0.4s' },
+  cpg:      { title: 'GRAPH CONSTRUCTION',  subtitle: 'Code Property Graph (CPG) construction',       icon: Network,    time: '0.9s' },
+  gnn:      { title: 'VULNERABILITY RANK',  subtitle: 'GraphSAGE GNN prioritisation pass',            icon: Sparkles,   time: '0.7s' },
+  security: { title: 'DIRECTED ANALYSIS',   subtitle: 'Dual security engine execution',               icon: Search,     time: '3.4s' },
+  finding:  { title: 'EVIDENCE SYNTHESIS',  subtitle: 'Triage & evidence statement generation',       icon: Shield,     time: '0.3s' },
+  patch:    { title: 'PATCH SYNTHESIS',     subtitle: 'Context-aware AI patch generation',            icon: GitBranch,  time: '1.9s' },
+  verify:   { title: 'RE-VERIFICATION',     subtitle: 'Multi-vector exploit replay & sanitiser run',  icon: ShieldCheck,time: '4.1s' },
+};
+
+/* ────────────────────────────────────────────────────────────
+   OVERVIEW PAGE
+   ──────────────────────────────────────────────────────────── */
 function OverviewPage() {
-  const query = useGetOverview();
-  const projects = useListProjects();
-  const findings = useListFindings();
-  const timingTests = useListTimingTests();
+  const query         = useGetOverview();
+  const projects      = useListProjects();
+  const findings      = useListFindings();
+  const timingTests   = useListTimingTests();
 
-  const [time, setTime] = useState({ h: 1, m: 25, s: 6 });
+  /* ── UTC elapsed clock ── */
+  const [elapsed, setElapsed] = useState({ h: 1, m: 25, s: 6 });
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTime(t => {
-        let ns = t.s + 1;
-        let nm = t.m;
-        let nh = t.h;
-        if (ns >= 60) { ns = 0; nm += 1; }
-        if (nm >= 60) { nm = 0; nh += 1; }
-        return { h: nh, m: nm, s: ns };
+    const t = setInterval(() => {
+      setElapsed(prev => {
+        let s = prev.s + 1, m = prev.m, h = prev.h;
+        if (s >= 60) { s = 0; m++; }
+        if (m >= 60) { m = 0; h++; }
+        return { h, m, s };
       });
     }, 1000);
-    return () => clearInterval(timer);
+    return () => clearInterval(t);
   }, []);
 
-  const data = query.data as any;
   if (query.isLoading || projects.isLoading || findings.isLoading || timingTests.isLoading) {
-    return <><Header eyebrow="Operator view" heading="Security state" sub="Consolidating target evidence and engine activity." /><Loading /></>;
+    return <><PageHeader eyebrow="OPERATOR VIEW · MISSION COMMAND" heading="Security State" sub="Consolidating target evidence and engine telemetry." /><Loading label="CORRELATING MISSION DATA" /></>;
   }
   if (query.isError || projects.isError || findings.isError || timingTests.isError) {
-    return <><Header eyebrow="Operator view" heading="Security state" sub="Current target posture at a glance." /><ErrorState retry={() => query.refetch()} /></>;
+    return <><PageHeader eyebrow="OPERATOR VIEW · MISSION COMMAND" heading="Security State" sub="Current target posture at a glance." /><ErrorState retry={() => query.refetch()} /></>;
   }
 
-  const counts = data?.counts ?? {};
-  const stages = data?.stages ?? [];
-  const runs = data?.recentRuns ?? [];
+  const data           = query.data as any;
+  const counts         = data?.counts ?? {};
+  const stages         = data?.stages ?? [];
+  const runs           = data?.recentRuns ?? [];
+  const projectsData   = (projects.data as any[]) ?? [];
+  const findingsData   = (findings.data as any[]) ?? [];
+  const timingTestsData= (timingTests.data as any[]) ?? [];
 
-  const projectsData = (projects.data as any[]) ?? [];
-  const findingsData = (findings.data as any[]) ?? [];
-  const timingTestsData = (timingTests.data as any[]) ?? [];
+  const activeFiles    = projectsData.reduce((a: number, p: any) => a + (p.files ?? 0), 0);
+  const timingLeak     = timingTestsData.find((t: any) => t.result === 'potential_leakage');
+  const tValue         = timingLeak ? Number(timingLeak.statistic).toFixed(2) : '18.42';
+  const completedRun   = runs.find((r: any) => r.status === 'completed');
+  const remediatedPct  = completedRun ? completedRun.progress : 100;
+  const criticalFindings = findingsData.filter((f: any) => f.severity === 'critical');
 
-  // derive dynamic metrics
-  const activeFiles = projectsData.reduce((acc: number, p: any) => acc + (p.files ?? 0), 0);
-  const timingLeak = timingTestsData.find((t: any) => t.result === 'potential_leakage');
-  const tValue = timingLeak ? timingLeak.statistic : 18.42;
-
-  // remediated target progress calculation
-  const completedRun = runs.find((r: any) => r.status === 'completed');
-  const remediatedPercent = completedRun ? completedRun.progress : 100;
-
-  const stageMeta: Record<string, { title: string, subtitle: string, icon: any, time: string }> = {
-    target: { title: 'TARGET', subtitle: 'Target Ingestion & Validation', icon: FileCode2, time: '0.4s' },
-    cpg: { title: 'CPG', subtitle: 'Code Property Graph (CPG)', icon: Network, time: '0.9s' },
-    gnn: { title: 'GNN', subtitle: 'GraphSAGE GNN Prioritization', icon: Sparkles, time: '0.7s' },
-    security: { title: 'SECURITY', subtitle: 'Dual Security Engine Execution', icon: Search, time: '3.4s' },
-    finding: { title: 'FINDING', subtitle: 'Evidence Synthesis & Triage', icon: Shield, time: '0.3s' },
-    patch: { title: 'PATCH', subtitle: 'Context-Aware AI Patching', icon: GitBranch, time: '1.9s' },
-    verify: { title: 'RE-VERIFY', subtitle: 'Multi-Vector Re-Verification', icon: ShieldCheck, time: '4.1s' },
+  const getProjectMeta = (p: any) => {
+    const pf = findingsData.filter((f: any) => f.projectName === p.name);
+    const crit = pf.filter((f: any) => f.severity === 'critical').length;
+    return { isVulnerable: crit > 0, criticalCount: crit };
   };
 
-  const workloadDays = [
-    { day: 'S', height: 'h-[35%]', type: 'stripes' },
-    { day: 'M', height: 'h-[65%]', type: 'emerald' },
-    { day: 'T', height: 'h-[55%]', type: 'emerald', tooltip: '74%', active: true },
-    { day: 'W', height: 'h-[85%]', type: 'forest' },
-    { day: 'T', height: 'h-[75%]', type: 'stripes' },
-    { day: 'F', height: 'h-[45%]', type: 'stripes' },
-    { day: 'S', height: 'h-[55%]', type: 'stripes' },
-  ];
+  return (
+    <div className="animate-rise" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <PageHeader
+        eyebrow={`OPERATOR VIEW · ${new Date().toISOString().slice(0,10)}`}
+        heading="Security State"
+        sub="A compact view of what VARUNA knows, what it is testing, and what still needs an operator."
+      />
 
-  const getProjectMetadata = (project: any, findingsList: any[]) => {
-    const projFindings = findingsList.filter((f) => f.projectName === project.name);
-    const criticalCount = projFindings.filter((f) => f.severity === 'critical').length;
-    const highCount = projFindings.filter((f) => f.severity === 'high').length;
-    const isVulnerable = criticalCount > 0 || highCount > 0;
-    
-    let kind = 'library';
-    if (project.name.includes('wire') || project.name.includes('auth')) kind = 'protocol';
-    if (project.name.includes('parser')) kind = 'parser';
-    
-    return {
-      isVulnerable,
-      criticalCount,
-      badgeText: isVulnerable ? 'Vulnerable' : 'Remediated',
-      subtext: `${project.language} ${kind} • ${project.files ?? 0} files`,
-      icon: project.targetType === 'binary' ? Cpu : project.targetType === 'protocol' ? Network : Shield,
-    };
-  };
-
-  return <div className="space-y-6 animate-rise">
-    <Header eyebrow="Operator view / 08:42 UTC" heading="Security state" sub="A compact view of what VARUNA knows, what it is testing, and what still needs an operator." />
-
-    {/* 1. Four KPI cards across the top */}
-    <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-      {/* Card 1: Total Targets */}
-      <div className="rounded-2xl bg-[#0B3F27] text-white p-5 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[140px] hover:shadow-md transition-all">
-        <div className="flex items-center justify-between w-full">
-          <span className="text-[13px] font-semibold text-white/80">Total Targets</span>
-          <div className="w-8 h-8 rounded-full border border-white/20 bg-white/10 text-white flex items-center justify-center">
-            <ArrowUpRight size={14} />
+      {/* ── KPI STRIP ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, border: '1px solid var(--border-subtle)', borderRadius: 3, overflow: 'hidden' }}>
+        {[
+          { label: 'TARGETS ANALYSED',  value: counts.targets ?? projectsData.length, sub: `+${activeFiles || 0} files active`, tone: undefined },
+          { label: 'FIXES VERIFIED',    value: `${remediatedPct}%`, sub: '6/6 verification checks passed', tone: 'ok' as const },
+          { label: 'PIPELINE STAGES',   value: stages.length, sub: `${stages.filter((s: any) => s.state === 'completed').length} completed`, tone: undefined },
+          { label: 'CRITICAL FINDINGS', value: counts.criticalFindings ?? criticalFindings.length, sub: `t = ${tValue} · action required`, tone: (counts.criticalFindings ?? criticalFindings.length) > 0 ? 'critical' as const : 'ok' as const },
+        ].map((m, i) => (
+          <div key={i} style={{ background: 'var(--surface-1)', padding: '14px 16px', borderRight: i < 3 ? '1px solid var(--border-subtle)' : undefined }}>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: 'var(--app-font-mono)', marginBottom: 6 }}>
+              {m.label}
+            </div>
+            <div data-testid={`value-${m.label.toLowerCase().replaceAll(' ', '-')}`} style={{
+              fontFamily: 'var(--app-font-mono)', fontSize: 28, fontWeight: 700, lineHeight: 1,
+              color: m.tone === 'critical' ? 'var(--status-critical)' : m.tone === 'ok' ? 'var(--status-success)' : 'var(--text-primary)',
+            }}>
+              {fmt(m.value)}
+            </div>
+            <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 4 }}>{m.sub}</div>
           </div>
-        </div>
-        <div>
-          <div className="text-5xl font-bold font-sans mt-3">{counts.targets ?? 0}</div>
-          <div className="flex items-center mt-3">
-            <span className="bg-white/15 text-[#34D399] px-2 py-0.5 rounded-full text-[10px] font-bold">
-              +{activeFiles || 12} files
-            </span>
-            <span className="text-white/80 text-[11px] ml-2">in active memory</span>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Card 2: Remediated & Verified */}
-      <div className="rounded-2xl border border-[#E5EAE7] bg-white p-5 shadow-2xs relative overflow-hidden flex flex-col justify-between min-h-[140px] hover:shadow-md transition-all">
-        <div className="flex items-center justify-between w-full">
-          <span className="text-[13px] font-semibold text-gray-500">Remediated & Verified</span>
-          <div className="w-8 h-8 rounded-full border border-[#E5EAE7] bg-gray-50 text-gray-500 flex items-center justify-center">
-            <ArrowUpRight size={14} />
-          </div>
-        </div>
-        <div>
-          <div className="text-5xl font-bold font-sans mt-3 text-gray-900">{remediatedPercent}%</div>
-          <div className="flex items-center mt-3">
-            <div className="bg-[#ECFDF5] border border-[#dcefe3] px-2 py-0.5 rounded-md text-[9px] font-bold text-[#0F5132] leading-tight">
-              <div>6/6 checks</div>
-              <div>passed</div>
-            </div>
-            <span className="text-gray-500 text-[10px] ml-3 leading-tight">TVLA + ASan<br/>validated</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Card 3: Pipeline Executions */}
-      <div className="rounded-2xl border border-[#E5EAE7] bg-white p-5 shadow-2xs relative overflow-hidden flex flex-col justify-between min-h-[140px] hover:shadow-md transition-all">
-        <div className="flex items-center justify-between w-full">
-          <span className="text-[13px] font-semibold text-gray-500">Pipeline Executions</span>
-          <div className="w-8 h-8 rounded-full border border-[#E5EAE7] bg-gray-50 text-gray-500 flex items-center justify-center">
-            <ArrowUpRight size={14} />
-          </div>
-        </div>
-        <div>
-          <div className="text-5xl font-bold font-sans mt-3 text-gray-900">{stages.length}</div>
-          <div className="flex items-center mt-3">
-            <div className="bg-[#EEF2FF] border border-[#E0E7FF] px-2.5 py-1 rounded-md text-[9px] font-bold text-[#4F46E5] leading-tight">
-              {stages.length} CPG nodes
-            </div>
-            <span className="text-gray-500 text-[10px] ml-3">GNN scored</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Card 4: Critical Findings */}
-      <div className="rounded-2xl border border-[#E5EAE7] bg-white p-5 shadow-2xs relative overflow-hidden flex flex-col justify-between min-h-[140px] hover:shadow-md transition-all">
-        <div className="flex items-center justify-between w-full">
-          <span className="text-[13px] font-semibold text-gray-500">Critical Findings</span>
-          <div className="w-8 h-8 rounded-full border border-[#E5EAE7] bg-gray-50 text-gray-500 flex items-center justify-center">
-            <ArrowUpRight size={14} />
-          </div>
-        </div>
-        <div>
-          <div className="text-5xl font-bold font-sans mt-3 text-[#E11D48]">{counts.criticalFindings ?? 0}</div>
-          <div className="flex items-center mt-3">
-            <div className="bg-[#FFF1F2] border border-[#FFE4E6] px-2.5 py-1 rounded-md text-[9px] font-bold text-[#E11D48] leading-tight">
-              t={tValue}
-            </div>
-            <span className="text-gray-500 text-[10px] ml-3">Action required</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {/* 2. Large Autonomous Cyber Reasoning Pipeline section & 3. Seven pipeline stages */}
-    <div className="rounded-2xl border border-[#E5EAE7] bg-white p-6 shadow-2xs">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-[16px] font-bold text-gray-900">Autonomous Cyber Reasoning Pipeline</h2>
-            <span className="bg-[#EAF2ED] text-[#0F5132] text-[10px] font-bold px-2 py-0.5 rounded-full">VARUNA v2.4</span>
-          </div>
-          <p className="text-gray-500 text-xs mt-1">Real-time execution graph: from C/C++ AST normalization to GNN prioritization and 6-vector patch validation.</p>
-        </div>
-        <Link href="/analysis" className="bg-[#0F5132] text-white hover:bg-[#0A3824] px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all self-start sm:self-center shrink-0 shadow-2xs hover:shadow-sm">
-          <Play size={13} fill="currentColor" />
-          <span>Execute Full Reasoning Pipeline</span>
-        </Link>
-      </div>
-
-      {/* Grid of 7 stages */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mt-6">
-        {stages.map((stage: any, i: number) => {
-          const meta = stageMeta[stage.key] || { title: stage.label.toUpperCase(), subtitle: stage.detail, icon: Shield, time: '0.5s' };
-          const Icon = meta.icon;
-          const isCompleted = stage.state === 'completed';
-          const isRunning = stage.state === 'running';
-
-          return <div key={stage.key} className={cx(
-            'rounded-xl border p-4 flex flex-col justify-between min-h-[145px] relative overflow-hidden transition-all',
-            isCompleted ? 'border-[#34D399]/40 bg-white' : isRunning ? 'border-[#F59E0B]/40 bg-white shadow-xs' : 'border-[#E5EAE7] bg-[#F8FAF9]'
-          )}>
-            {/* Top row */}
-            <div className="flex items-start justify-between w-full">
-              <div className={cx(
-                'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-                isCompleted ? 'bg-[#ECFDF5] text-[#10B981]' : isRunning ? 'bg-amber-50 text-[#F59E0B]' : 'bg-[#E5EAE7] text-gray-400'
-              )}>
-                <Icon size={16} />
-              </div>
-              <span className="font-mono text-[10px] text-gray-400 font-semibold">{String(i + 1).padStart(2, '0')}</span>
-            </div>
-
-            {/* Middle row */}
-            <div className="mt-3">
-              <div className="text-[12px] font-bold text-gray-900 tracking-tight">{meta.title}</div>
-              <div className="text-[10px] text-gray-500 leading-snug mt-0.5 line-clamp-2 h-7">{meta.subtitle}</div>
-            </div>
-
-            {/* Bottom row status pill */}
-            <div className="mt-4 flex items-center">
-              <div className={cx(
-                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider',
-                isCompleted ? 'bg-[#ECFDF5] border border-[#D1FAE5] text-[#10B981]' : isRunning ? 'bg-amber-50 border border-amber-100 text-[#F59E0B] animate-pulse' : 'bg-gray-100 border border-gray-200 text-gray-400'
-              )}>
-                {isCompleted ? <Check size={8} strokeWidth={3} /> : isRunning ? <div className="h-1.5 w-1.5 rounded-full bg-[#F59E0B] animate-ping" /> : null}
-                <span>{isCompleted ? `COMPLETED ${meta.time}` : isRunning ? 'RUNNING' : 'PENDING'}</span>
-              </div>
-            </div>
-
-            {/* Bottom accent bar */}
-            <div className={cx(
-              'absolute bottom-0 left-0 w-full h-[3px]',
-              isCompleted ? 'bg-[#10B981]' : isRunning ? 'bg-[#F59E0B]' : 'bg-gray-200'
-            )} />
-          </div>;
-        })}
-      </div>
-    </div>
-
-    {/* Workload chart & Execution engine */}
-    <div className="grid gap-5 lg:grid-cols-[1.85fr_1.15fr]">
-      {/* 4. Security Analysis Workload chart */}
-      <div className="rounded-2xl border border-[#E5EAE7] bg-white p-6 shadow-2xs flex flex-col justify-between min-h-[220px]">
-        <div className="flex items-center justify-between w-full">
-          <div>
-            <h2 className="text-[14px] font-bold text-gray-900">Security Analysis Workload</h2>
-            <p className="text-gray-500 text-[11px] mt-0.5">TVLA samples & fuzz iterations per day</p>
-          </div>
-          <div className="flex items-center gap-4 text-[10px] text-gray-500">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#0F5132]" />
-              <span>GNN Prioritized</span>
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" />
-              <span>TVLA / Fuzz</span>
-            </span>
-          </div>
-        </div>
-
-        <div className="flex justify-between items-end h-32 mt-6 px-4 w-full">
-          {workloadDays.map((w) => (
-            <div key={w.day} className="flex flex-col items-center flex-1 h-full justify-end relative">
-              {w.tooltip && (
-                <div className="absolute -top-7 bg-[#ECFDF5] border border-[#D1FAE5] text-[#10B981] text-[9px] font-bold px-1.5 py-0.5 rounded-md shadow-2xs animate-bounce">
-                  {w.tooltip}
+      {/* ── MISSION PIPELINE + ENGINE ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 220px', gap: 12 }}>
+        {/* Pipeline stages */}
+        <div className="op-panel">
+          <SectionLabel
+            label="AUTONOMOUS REASONING PIPELINE"
+            meta={<span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>VARUNA v2.4 · {stages.length} STAGES</span>}
+          />
+          <div style={{ padding: 12, display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
+            {stages.map((stage: any, i: number) => {
+              const meta = stageMeta[stage.key] || { title: stage.label?.toUpperCase() ?? stage.key.toUpperCase(), subtitle: stage.detail ?? '', icon: Shield, time: '—' };
+              const Icon = meta.icon;
+              const isCompleted = stage.state === 'completed';
+              const isRunning   = stage.state === 'running';
+              return (
+                <div key={stage.key} className={cx('stage-card', isCompleted ? 'stage-card--complete' : isRunning ? 'stage-card--running' : 'stage-card--pending')}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: isCompleted ? 'var(--status-success)' : isRunning ? 'var(--accent-amber)' : 'var(--text-tertiary)' }}>
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <Icon size={12} color={isCompleted ? 'var(--status-success)' : isRunning ? 'var(--accent-amber)' : 'var(--text-tertiary)'} />
+                  </div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: isCompleted ? 'var(--text-primary)' : isRunning ? 'var(--text-primary)' : 'var(--text-tertiary)', letterSpacing: '0.04em', marginBottom: 4, lineHeight: 1.3 }}>
+                    {meta.title}
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <StatusBadge value={isCompleted ? 'complete' : isRunning ? 'running' : 'queued'} />
+                  </div>
                 </div>
-              )}
-              <div className={cx(
-                'w-8 rounded-full transition-all',
-                w.height,
-                w.type === 'stripes' ? 'bg-diagonal-stripes-subtle' : w.type === 'emerald' ? 'bg-[#10B981]' : 'bg-[#0F5132]'
-              )} />
-              <span className={cx('text-[10px] mt-2 font-semibold', w.active ? 'text-[#10B981] font-bold' : 'text-gray-400')}>{w.day}</span>
+              );
+            })}
+          </div>
+          {/* Recent runs */}
+          <div style={{ padding: '0 12px 12px' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: 'var(--app-font-mono)', marginBottom: 8, paddingTop: 8, borderTop: '1px solid var(--border-subtle)' }}>
+              RECENT RUNS
+            </div>
+            <Runs runs={runs.slice(0, 3)} />
+          </div>
+        </div>
+
+        {/* Execution Engine */}
+        <div className="op-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+          <SectionLabel label="EXECUTION ENGINE" meta={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span className="animate-blink" style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: 'var(--status-success)' }} />
+              <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--status-success)' }}>ACTIVE</span>
+            </div>
+          } />
+          <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
+            <div style={{ fontSize: 9, color: 'var(--text-tertiary)', fontFamily: 'var(--app-font-mono)' }}>STAGE · SIDE-CHANNEL VERIFY</div>
+            <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 28, fontWeight: 700, color: 'var(--accent-amber)', letterSpacing: '0.08em', textAlign: 'center', padding: '10px 0' }}>
+              {String(elapsed.h).padStart(2,'0')}:{String(elapsed.m).padStart(2,'0')}:{String(elapsed.s).padStart(2,'0')}
+            </div>
+            <div style={{ fontSize: 8, fontFamily: 'var(--app-font-mono)', color: 'var(--text-tertiary)', textAlign: 'center', letterSpacing: '0.12em' }}>
+              CPU CYCLES: 3.42 × 10⁹
+            </div>
+            <div className="op-divider" />
+            {[
+              { label: 'GRAPH NODES', value: fmt(counts.graphNodes ?? 12847) },
+              { label: 'CANDIDATES',  value: fmt(counts.candidates ?? 84) },
+              { label: 'CAMPAIGNS',   value: fmt(counts.campaigns ?? 6) },
+              { label: 'CRASHES',     value: fmt(counts.crashes ?? 4) },
+            ].map(row => (
+              <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--text-tertiary)', fontFamily: 'var(--app-font-mono)' }}>{row.label}</span>
+                <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>{row.value}</span>
+              </div>
+            ))}
+            <div className="op-divider" />
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button className="btn-secondary" style={{ flex: 1, justifyContent: 'center', fontSize: 9 }}>
+                <Play size={10} fill="currentColor" /> RUN
+              </button>
+              <button className="btn-secondary" style={{ flex: 1, justifyContent: 'center', fontSize: 9 }}>
+                <RotateCw size={10} /> RESET
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── BOTTOM ROW: Priority Finding + Posture + Targets ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px 1fr', gap: 12 }}>
+        {/* Priority finding */}
+        <div className="op-panel" style={{ borderColor: 'rgba(183,53,53,.3)' }}>
+          <SectionLabel label="PRIORITY FINDING" meta={<StatusBadge value="critical" />} />
+          <div style={{ padding: '14px' }}>
+            <div style={{ fontSize: 10, fontFamily: 'var(--app-font-mono)', color: 'var(--text-tertiary)', marginBottom: 8 }}>SECURITY ACTION ITEM</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8, lineHeight: 1.4 }}>
+              Timing Side-Channel Information Leakage in Token Verification
+            </div>
+            <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 10, color: 'var(--text-tertiary)', marginBottom: 12 }}>
+              src/auth/token_compare.cpp · compare_token()
+            </div>
+            <div style={{ padding: '10px 12px', background: 'rgba(183,53,53,.07)', border: '1px solid rgba(183,53,53,.2)', borderRadius: 2, fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 14 }}>
+              <strong style={{ color: 'var(--status-critical)' }}>TVLA t = {tValue}</strong> · |t| &gt; 4.5 threshold breached.
+              Exploitable early-exit timing leak requires AI patch application.
+            </div>
+            <Link href="/patches" className="btn-primary" style={{ display: 'inline-flex', gap: 6, textDecoration: 'none', width: '100%', justifyContent: 'center' }}>
+              <Wrench size={11} /> APPLY PATCH &amp; VERIFY
+            </Link>
+          </div>
+        </div>
+
+        {/* Posture arc */}
+        <div className="op-panel">
+          <SectionLabel label="POSTURE" meta={<span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--status-success)' }}>6/6 VECTORS</span>} />
+          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <svg viewBox="0 0 100 55" style={{ width: 140, height: 78 }}>
+              <path d="M 12 54 A 38 38 0 0 1 88 54" fill="none" stroke="var(--surface-3)" strokeWidth="10" strokeLinecap="round" />
+              <path d="M 12 54 A 38 38 0 0 1 88 54" fill="none" stroke="var(--status-success)" strokeWidth="10" strokeLinecap="round"
+                strokeDasharray="119.4" strokeDashoffset={119.4 * (1 - remediatedPct / 100)}
+                style={{ transition: 'stroke-dashoffset .6s ease' }}
+              />
+            </svg>
+            <div style={{ textAlign: 'center', marginTop: -10 }}>
+              <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>{remediatedPct}%</div>
+              <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>REMEDIATED</div>
+            </div>
+            <div style={{ width: '100%' }}>
+              {[
+                { label: 'VERIFIED', color: 'var(--status-success)', pct: remediatedPct },
+                { label: 'PROGRESS', color: 'var(--accent-amber)', pct: 15 },
+              ].map(row => (
+                <div key={row.label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: row.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 9, color: 'var(--text-tertiary)', flex: 1 }}>{row.label}</span>
+                  <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-secondary)' }}>{row.pct}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Targets list */}
+        <div className="op-panel">
+          <SectionLabel label="SECURITY TARGETS" meta={
+            <Link href="/analysis" style={{ textDecoration: 'none' }}>
+              <button className="btn-secondary" style={{ fontSize: 9, padding: '3px 8px', display: 'flex', gap: 4, alignItems: 'center' }}>
+                <Plus size={9} /> NEW
+              </button>
+            </Link>
+          } />
+          <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+            {projectsData.length ? projectsData.map((p: any) => {
+              const meta = getProjectMeta(p);
+              return (
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: '1px solid var(--border-subtle)' }}>
+                  <div style={{ width: 3, alignSelf: 'stretch', borderRadius: 1, background: meta.isVulnerable ? 'var(--status-critical)' : 'var(--status-success)', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                    <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)', marginTop: 2 }}>{p.language} · {p.files ?? 0} files</div>
+                  </div>
+                  <StatusBadge value={meta.isVulnerable ? 'critical' : 'verified'} />
+                </div>
+              );
+            }) : <Empty label="targets" />}
+          </div>
+        </div>
+      </div>
+
+      {/* ── MISSION STATUS ── */}
+      <div className="op-panel">
+        <SectionLabel label="MISSION STATUS" meta={<span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>AUTONOMOUS REASONING PIPELINE</span>} />
+        <div style={{ padding: '0 14px 14px' }}>
+          {stages.map((stage: any, i: number) => {
+            const meta = stageMeta[stage.key] || { title: stage.label?.toUpperCase() ?? stage.key.toUpperCase(), subtitle: '' };
+            const isCompleted = stage.state === 'completed';
+            const isRunning   = stage.state === 'running';
+            return (
+              <div key={stage.key} style={{ display: 'grid', gridTemplateColumns: '28px 1fr 100px', gap: 12, padding: '10px 0', borderBottom: i < stages.length - 1 ? '1px solid rgba(38,50,59,.5)' : 'none', alignItems: 'center' }}>
+                <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)' }}>
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: isCompleted ? 'var(--text-primary)' : isRunning ? 'var(--accent-amber)' : 'var(--text-tertiary)' }}>
+                    {meta.title}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2 }}>{meta.subtitle}</div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <StatusBadge value={isCompleted ? 'complete' : isRunning ? 'analyzing' : 'queued'} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   ANALYSIS PAGE
+   ──────────────────────────────────────────────────────────── */
+function AnalysisPage() {
+  const projects     = useListProjects();
+  const runs         = useListAnalysisRuns();
+  const createProject = useCreateProject();
+  const createRun    = useCreateAnalysisRun();
+  const qc           = useQueryClient();
+  const [projectId, setProjectId] = useState('');
+  const [name, setName]           = useState('');
+  const [language, setLanguage]   = useState('C++');
+  const [targetType, setTargetType] = useState('source');
+  const [selected, setSelected]   = useState<string[]>(['cpg', 'gnn', 'asan']);
+  const [fileName, setFileName]   = useState('');
+
+  const list    = (projects.data as any[]) ?? [];
+  const runList = (runs.data as any[])     ?? [];
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (projectId) {
+      createRun.mutate(
+        { data: { projectId, modules: selected } as any },
+        { onSuccess: () => { qc.invalidateQueries({ queryKey: getListAnalysisRunsQueryKey() }); qc.invalidateQueries({ queryKey: getGetOverviewQueryKey() }); } }
+      );
+    } else {
+      createProject.mutate(
+        { data: { name, language, targetType, description: fileName ? `Registered from ${fileName}` : 'Target registered in VARUNA' } as any },
+        {
+          onSuccess: (project: any) => {
+            setProjectId(project.id);
+            createRun.mutate(
+              { data: { projectId: project.id, modules: selected } as any },
+              { onSuccess: () => { qc.invalidateQueries({ queryKey: getListAnalysisRunsQueryKey() }); qc.invalidateQueries({ queryKey: getGetOverviewQueryKey() }); } }
+            );
+          },
+        }
+      );
+    }
+  };
+
+  return (
+    <div className="animate-rise" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <PageHeader
+        eyebrow="TARGET INTAKE · AUTONOMOUS ANALYSIS"
+        heading="Analysis Workspace"
+        sub="Register a source or binary target, choose evidence modules, and open a traceable analysis run."
+      />
+
+      {/* Prototype notice */}
+      <div style={{ padding: '8px 12px', background: 'rgba(193,154,84,.07)', border: '1px solid rgba(193,154,84,.25)', borderRadius: 2, fontSize: 10, color: 'var(--accent-amber)', fontFamily: 'var(--app-font-mono)' }}>
+        <strong>PROTOTYPE BOUNDARY</strong> · Target intake and run controls are connected to the API. Engine output shown below is only displayed after the server returns it.
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: 12 }}>
+        {/* Register target */}
+        <Panel title="REGISTER TARGET" meta={<span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>STEP 01 / 02</span>}>
+          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 6 }}>
+                EXISTING TARGET
+              </label>
+              <select value={projectId} onChange={e => setProjectId(e.target.value)} data-testid="select-analysis-project" className="op-select">
+                <option value="">Register new target</option>
+                {list.map((p: any) => <option key={p.id} value={p.id}>{p.name} · {p.language}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 6 }}>TARGET NAME</label>
+                <input value={name} onChange={e => setName(e.target.value)} required={!projectId} data-testid="input-target-name" placeholder="e.g. libwire parser" className="op-input" />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 6 }}>LANGUAGE</label>
+                <select value={language} onChange={e => setLanguage(e.target.value)} data-testid="select-target-language" className="op-select">
+                  <option>C++</option><option>C</option><option>Rust</option><option>Binary</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 6 }}>TARGET KIND</label>
+              <select value={targetType} onChange={e => setTargetType(e.target.value)} data-testid="select-target-type" className="op-select">
+                <option value="source">Source tree</option>
+                <option value="binary">Compiled binary</option>
+                <option value="protocol">Protocol endpoint</option>
+              </select>
+            </div>
+            <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1px dashed var(--border-medium)', borderRadius: 3, padding: '20px 12px', cursor: 'pointer', gap: 6, background: 'var(--surface-1)' }}>
+              <UploadCloud size={18} color="var(--text-tertiary)" />
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{fileName || 'ATTACH TARGET METADATA'}</span>
+              <span style={{ fontSize: 9, color: 'var(--text-tertiary)' }}>File reference only in this prototype</span>
+              <input type="file" onChange={e => setFileName(e.target.files?.[0]?.name ?? '')} data-testid="input-target-file" style={{ display: 'none' }} />
+            </label>
+            <button type="submit" disabled={createProject.isPending || createRun.isPending || (!projectId && !name)} data-testid="button-start-analysis" className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+              <Play size={12} fill="currentColor" />
+              {createProject.isPending || createRun.isPending ? 'OPENING RUN...' : 'OPEN ANALYSIS RUN'}
+            </button>
+          </form>
+        </Panel>
+
+        {/* Evidence modules */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <Panel title="EVIDENCE MODULES" meta={<span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>SELECT AT LEAST ONE</span>}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              {modules.map(mod => {
+                const isSelected = selected.includes(mod);
+                return (
+                  <button
+                    key={mod}
+                    type="button"
+                    onClick={() => setSelected(prev => prev.includes(mod) ? prev.filter(x => x !== mod) : [...prev, mod])}
+                    data-testid={`button-module-${mod}`}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', textAlign: 'left', cursor: 'pointer',
+                      background: isSelected ? 'rgba(124,128,80,.1)' : 'var(--surface-1)',
+                      border: `1px solid ${isSelected ? 'rgba(124,128,80,.5)' : 'var(--border-subtle)'}`,
+                      borderRadius: 3, color: isSelected ? 'var(--text-primary)' : 'var(--text-tertiary)',
+                    }}
+                  >
+                    <div style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', borderRadius: 2, background: isSelected ? 'var(--accent-olive)' : 'var(--surface-2)', flexShrink: 0 }}>
+                      {isSelected
+                        ? <Check size={12} color="var(--bg-primary)" strokeWidth={3} />
+                        : <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, fontWeight: 700, color: 'var(--text-tertiary)' }}>{mod.slice(0,2).toUpperCase()}</span>}
+                    </div>
+                    <div>
+                      <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{mod}</div>
+                      <div style={{ fontSize: 9, color: 'var(--text-tertiary)', marginTop: 2, lineHeight: 1.4 }}>
+                        {mod === 'cpg' ? 'Code property graph extraction' : mod === 'gnn' ? 'Graph-guided prioritisation' : mod === 'timing' ? 'Welch t-test side-channel scan' : mod === 'protocol' ? 'Mutation campaign' : `${mod.toUpperCase()} instrumentation`}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {/* Run order */}
+            <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--surface-1)', border: '1px solid var(--border-subtle)', borderRadius: 3 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', color: 'var(--text-tertiary)', marginBottom: 8 }}>EXECUTION ORDER</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
+                {selected.map((m, i) => (
+                  <span key={m} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 10, padding: '2px 8px', border: '1px solid var(--border-medium)', borderRadius: 2, color: 'var(--accent-olive-lt)' }}>{m}</span>
+                    {i < selected.length - 1 && <ChevronRight size={10} color="var(--text-tertiary)" />}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </Panel>
+
+          {/* Latest runs */}
+          <Panel title="RECENT ANALYSIS RUNS" meta={<span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>{runList.length} RUNS</span>}>
+            {runs.isLoading ? <Loading label="LOADING RUNS" /> : runs.isError ? <ErrorState retry={() => runs.refetch()} /> : <Runs runs={runList.slice(0, 5)} />}
+          </Panel>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   TIMING PAGE — Side-Channel Analysis Lab
+   ──────────────────────────────────────────────────────────── */
+function TimingPage() {
+  const q          = useListTimingTests();
+  const projects   = useListProjects();
+  const create     = useCreateTimingTest();
+  const qc         = useQueryClient();
+  const [projectId, setProjectId] = useState('');
+  const [fn, setFn]               = useState('constant_time_compare');
+  const [samples, setSamples]     = useState('10000');
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    create.mutate({ data: { projectId, function: fn, samples: Number(samples) } as any }, { onSuccess: () => qc.invalidateQueries({ queryKey: getListTimingTestsQueryKey() }) });
+  };
+
+  const tests = (q.data as any[]) ?? [];
+
+  return (
+    <div className="animate-rise" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <PageHeader
+        eyebrow="SIDE-CHANNEL LAB · WELCH T-TEST"
+        heading="Timing Channels"
+        sub="Measure whether secret-dependent execution paths leave a statistically meaningful timing signal."
+        action={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', border: '1px solid var(--border-medium)', borderRadius: 3, background: 'var(--surface-1)', fontSize: 10, fontFamily: 'var(--app-font-mono)' }}>
+            <TestTube2 size={12} color="var(--accent-olive)" />
+            <span style={{ color: 'var(--text-secondary)' }}>WELCH THRESHOLD</span>
+            <strong style={{ color: 'var(--accent-amber)' }}>|t| ≥ 4.5</strong>
+          </div>
+        }
+      />
+      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 12 }}>
+        <Panel title="RUN TIMING TEST" meta={<span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>MIN 100 SAMPLES</span>}>
+          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 6 }}>TARGET</label>
+              <select value={projectId} onChange={e => setProjectId(e.target.value)} required data-testid="select-timing-project" className="op-select">
+                {((projects.data as any[]) ?? []).map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 6 }}>FUNCTION UNDER TEST</label>
+              <input value={fn} onChange={e => setFn(e.target.value)} required data-testid="input-timing-function" className="op-input" />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 6 }}>SAMPLE COUNT</label>
+              <input type="number" min="100" value={samples} onChange={e => setSamples(e.target.value)} data-testid="input-timing-samples" className="op-input" />
+            </div>
+            <button disabled={create.isPending} data-testid="button-run-timing" className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+              <Play size={12} fill="currentColor" />
+              {create.isPending ? 'COLLECTING SAMPLES...' : 'RUN SIDE-CHANNEL TEST'}
+            </button>
+          </form>
+          <div style={{ marginTop: 14, padding: '10px 12px', background: 'rgba(193,154,84,.06)', border: '1px solid rgba(193,154,84,.2)', borderRadius: 2, fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            <strong style={{ color: 'var(--accent-amber)' }}>INTERPRETATION</strong> · A potential leakage result is a review signal, not a confirmed vulnerability. Compare before and after patch measurements.
+          </div>
+        </Panel>
+        <Panel title="TEST EVIDENCE" meta={<span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>{tests.length} RECORDED</span>}>
+          {q.isLoading ? <Loading /> : q.isError ? <ErrorState retry={() => q.refetch()} /> : tests.length ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {tests.map((test: any) => (
+                <div key={test.id} data-testid={`card-timing-${test.id}`} style={{ padding: '12px 14px', background: 'var(--surface-1)', border: '1px solid var(--border-subtle)', borderRadius: 3 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    <div>
+                      <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>{test.function}</div>
+                      <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)', marginTop: 2 }}>{test.projectName} · {title(test.beforeAfter ?? 'before')} · {fmt(test.createdAt)}</div>
+                    </div>
+                    <StatusBadge value={test.result} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                    {[
+                      { label: 'SAMPLES',   value: fmt(test.samples) },
+                      { label: 'GROUPS',    value: fmt(test.groups) },
+                      { label: 'STATISTIC', value: Number(test.statistic ?? 0).toFixed(2) },
+                      { label: 'THRESHOLD', value: Number(test.threshold ?? 0).toFixed(2) },
+                    ].map(col => (
+                      <div key={col.label}>
+                        <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: 'var(--app-font-mono)' }}>{col.label}</div>
+                        <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 4 }}>{col.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <Empty label="timing tests" />}
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   PROTOCOL PAGE — Directed Fuzzing
+   ──────────────────────────────────────────────────────────── */
+function ProtocolPage() {
+  const q         = useListProtocolTests();
+  const projects  = useListProjects();
+  const create    = useCreateProtocolTest();
+  const qc        = useQueryClient();
+  const [projectId, setProjectId] = useState('');
+  const [target, setTarget]       = useState('decode_frame');
+  const [strategy, setStrategy]   = useState<string[]>(['bit flips', 'boundary values', 'length mutations']);
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    create.mutate({ data: { projectId, target, strategy } as any }, { onSuccess: () => qc.invalidateQueries({ queryKey: getListProtocolTestsQueryKey() }) });
+  };
+
+  const tests = (q.data as any[]) ?? [];
+
+  return (
+    <div className="animate-rise" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <PageHeader
+        eyebrow="MUTATION LAB · DIRECTED FUZZING"
+        heading="Protocol Fuzzing"
+        sub="Exercise parser boundaries with intentional mutations, then preserve coverage and crash evidence."
+        action={
+          <div style={{ padding: '6px 12px', border: '1px solid var(--border-medium)', borderRadius: 3, background: 'var(--surface-1)', fontSize: 9, fontFamily: 'var(--app-font-mono)', color: 'var(--accent-olive)' }}>
+            <Activity size={12} style={{ display: 'inline', marginRight: 4 }} />
+            CAMPAIGNS PRODUCE TRACEABLE EVIDENCE
+          </div>
+        }
+      />
+      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 12 }}>
+        <Panel title="CONFIGURE CAMPAIGN" meta={<span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>MUTATION PLAN</span>}>
+          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 6 }}>TARGET</label>
+              <select required value={projectId} onChange={e => setProjectId(e.target.value)} data-testid="select-protocol-project" className="op-select">
+                <option value="">Choose a target</option>
+                {((projects.data as any[]) ?? []).map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 6 }}>PARSER / MESSAGE TARGET</label>
+              <input value={target} onChange={e => setTarget(e.target.value)} required data-testid="input-protocol-target" className="op-input" />
+            </div>
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 8 }}>MUTATION STRATEGIES</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {['bit flips', 'boundary values', 'length mutations', 'dictionary tokens'].map(s => (
+                  <label key={s} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid var(--border-subtle)', borderRadius: 2, cursor: 'pointer', background: strategy.includes(s) ? 'rgba(124,128,80,.06)' : 'var(--surface-1)' }}>
+                    <input type="checkbox" checked={strategy.includes(s)} onChange={() => setStrategy(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s])} data-testid={`input-strategy-${s.replaceAll(' ', '-')}`}
+                      style={{ accentColor: 'var(--accent-olive)', width: 12, height: 12 }} />
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'var(--app-font-mono)' }}>{s}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <button disabled={create.isPending} data-testid="button-run-protocol" className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+              <Zap size={12} />
+              {create.isPending ? 'STARTING CAMPAIGN...' : 'START MUTATION CAMPAIGN'}
+            </button>
+          </form>
+        </Panel>
+        <Panel title="CAMPAIGN HISTORY" meta={<span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>{tests.length} CAMPAIGNS</span>}>
+          {q.isLoading ? <Loading /> : q.isError ? <ErrorState retry={() => q.refetch()} /> : tests.length ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {tests.map((test: any) => (
+                <div key={test.id} data-testid={`card-protocol-${test.id}`} style={{ padding: '12px 14px', background: 'var(--surface-1)', border: '1px solid var(--border-subtle)', borderRadius: 3 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    <div>
+                      <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>{test.target}</div>
+                      <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)', marginTop: 2 }}>{test.projectName} · {(test.fields ?? []).join(', ') || 'fields pending'}</div>
+                    </div>
+                    <StatusBadge value={test.state} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                    {[
+                      { label: 'INPUTS',   value: fmt(test.inputs) },
+                      { label: 'COVERAGE', value: `${test.coverage ?? 0}%` },
+                      { label: 'CRASHES',  value: fmt(test.crashes) },
+                      { label: 'UNIQUE',   value: fmt(test.uniqueCrashes), crit: true },
+                    ].map(col => (
+                      <div key={col.label}>
+                        <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: 'var(--app-font-mono)' }}>{col.label}</div>
+                        <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 13, fontWeight: 700, color: col.crit ? 'var(--status-critical)' : 'var(--text-secondary)', marginTop: 4 }}>{col.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <Empty label="protocol campaigns" />}
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────
+   FINDINGS PAGE — Threat Intelligence Ledger
+   ──────────────────────────────────────────────────────────── */
+function FindingsPage() {
+  const q           = useListFindings();
+  const [selectedId, setSelectedId] = useState('');
+  const findings    = (q.data as any[]) ?? [];
+  const detail      = useGetFinding(selectedId, { query: { enabled: !!selectedId, queryKey: [`/api/findings/${selectedId}`] } as any });
+
+  const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+  const sorted = [...findings].sort((a, b) => (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9));
+
+  return (
+    <div className="animate-rise" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <PageHeader
+        eyebrow="CENTRAL EVIDENCE LEDGER · THREAT INTELLIGENCE"
+        heading="Findings"
+        sub="Prioritised signals with code context, graph paths, and method context. Select a finding to inspect the evidence chain."
+      />
+      <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: 12 }}>
+        {/* Finding list */}
+        <div className="op-panel">
+          <SectionLabel label="FINDING QUEUE" meta={
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <SlidersHorizontal size={11} color="var(--text-tertiary)" />
+              <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>{findings.length} TOTAL</span>
+            </div>
+          } />
+          <div style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 260px)' }}>
+            {q.isLoading ? <div style={{ padding: 14 }}><Loading /></div> : q.isError ? <div style={{ padding: 14 }}><ErrorState retry={() => q.refetch()} /></div> : sorted.length ? sorted.map((finding: any) => {
+              const isSelected = selectedId === finding.id;
+              const sevColor = finding.severity === 'critical' ? 'var(--status-critical)' : finding.severity === 'high' ? 'var(--status-warning)' : finding.severity === 'medium' ? 'var(--accent-olive)' : 'var(--text-tertiary)';
+              return (
+                <button
+                  key={finding.id}
+                  onClick={() => setSelectedId(finding.id)}
+                  data-testid={`button-finding-${finding.id}`}
+                  style={{
+                    width: '100%', display: 'flex', alignItems: 'stretch', gap: 0, padding: 0,
+                    background: isSelected ? 'rgba(124,128,80,.07)' : 'transparent',
+                    border: 'none', borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div style={{ width: 3, background: sevColor, flexShrink: 0, borderRadius: 0 }} />
+                  <div style={{ flex: 1, padding: '10px 12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 4 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)', lineHeight: 1.3 }}>{finding.title}</div>
+                      <StatusBadge value={finding.severity} />
+                    </div>
+                    <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>
+                      {finding.file}:{finding.line} · {finding.function}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                      <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>{finding.cwe} · {finding.method}</span>
+                      <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, fontWeight: 700, color: 'var(--accent-olive-lt)' }}>GNN {Math.round((finding.score ?? 0) * 100)}%</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            }) : <Empty label="findings" />}
+          </div>
+        </div>
+
+        {/* Evidence detail */}
+        <div className="op-panel">
+          <SectionLabel label="EVIDENCE DETAIL" meta={selectedId && <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>{selectedId}</span>} />
+          <div style={{ padding: 14 }}>
+            {!selectedId ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 320, textAlign: 'center', gap: 10 }}>
+                <Network size={24} color="var(--text-tertiary)" strokeWidth={1.4} />
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>SELECT A FINDING</div>
+                <div style={{ fontSize: 10, color: 'var(--text-tertiary)', maxWidth: 260 }}>Code context, evidence statements, and graph traversal will appear here.</div>
+              </div>
+            ) : detail.isLoading ? <Loading label="LOADING EVIDENCE" /> : detail.isError ? <ErrorState retry={() => detail.refetch()} /> : <FindingDetail data={detail.data as any} />}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FindingDetail({ data }: { data: any }) {
+  return (
+    <div data-testid={`panel-finding-detail-${data.id}`} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+        <div>
+          <div style={{ marginBottom: 6 }}><StatusBadge value={data.severity} /></div>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{data.title}</h3>
+          <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 10, color: 'var(--text-tertiary)', marginTop: 4 }}>{data.cwe} · detected via {data.method}</div>
+        </div>
+        <div style={{ padding: '10px 14px', background: 'rgba(124,128,80,.1)', border: '1px solid rgba(124,128,80,.3)', borderRadius: 3, textAlign: 'center', flexShrink: 0 }}>
+          <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 18, fontWeight: 700, color: 'var(--accent-olive-lt)' }}>{Math.round((data.score ?? 0) * 100)}%</div>
+          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>GNN PRIORITY</div>
+        </div>
+      </div>
+
+      {/* Metadata */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        {[
+          { label: 'LOCATION', value: `${data.file}:${data.line}` },
+          { label: 'FUNCTION', value: data.function },
+        ].map(m => (
+          <div key={m.label} style={{ padding: '8px 10px', background: 'var(--surface-1)', border: '1px solid var(--border-subtle)', borderRadius: 2 }}>
+            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: 'var(--app-font-mono)', marginBottom: 4 }}>{m.label}</div>
+            <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 11, color: 'var(--text-secondary)' }}>{m.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Evidence statements */}
+      <div>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: 'var(--app-font-mono)', marginBottom: 8 }}>EVIDENCE STATEMENTS</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {(data.evidence ?? []).map((e: string, i: number) => (
+            <div key={i} style={{ display: 'flex', gap: 10, padding: '8px 10px', background: 'var(--surface-1)', border: '1px solid var(--border-subtle)', borderRadius: 2, fontSize: 11, lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+              <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, fontWeight: 700, color: 'var(--accent-olive)', flexShrink: 0, marginTop: 1 }}>0{i+1}</span>
+              {e}
             </div>
           ))}
         </div>
       </div>
 
-      {/* 5. Execution Engine panel */}
-      <div className="rounded-2xl bg-[#0B3F27] bg-tracker-waveform text-white p-6 shadow-sm relative overflow-hidden flex flex-col justify-between min-h-[220px]">
-        <div className="flex items-center justify-between w-full">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[#A6CDB8]">Execution Engine</span>
-          <span className="bg-white/10 text-[#34D399] px-2 py-0.5 rounded-full text-[9px] font-bold flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse" />
-            <span>ACTIVE</span>
-          </span>
+      {/* Code context */}
+      <div>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: 'var(--app-font-mono)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <FileCode2 size={11} /> SOURCE ANALYSIS
         </div>
-        
-        <div>
-          <p className="text-[11px] text-[#A6CDB8] mt-1">Stage: Side-Channel Verification</p>
-          <div className="text-4xl font-bold font-mono tracking-wider text-center mt-4">
-            {String(time.h).padStart(2, '0')}:{String(time.m).padStart(2, '0')}:{String(time.s).padStart(2, '0')}
-          </div>
-          <div className="text-[9px] font-mono text-center text-[#A6CDB8]/60 mt-1 uppercase tracking-widest">
-            CPU CYCLES: 3.42 x 10^9
-          </div>
-        </div>
-
-        <div className="flex justify-center items-center gap-4 mt-4">
-          <button className="w-10 h-10 rounded-full bg-white text-[#0F5132] flex items-center justify-center shadow-sm hover:scale-105 transition-all">
-            <div className="flex gap-0.5">
-              <div className="w-1 h-3.5 bg-[#0F5132] rounded-xs" />
-              <div className="w-1 h-3.5 bg-[#0F5132] rounded-xs" />
+        <pre className="op-code" style={{ margin: 0 }}>
+          {(data.code ?? []).map((line: any) => (
+            <div key={line.line} className={line.highlighted ? 'line-critical' : ''}>
+              <span className="line-num">{line.line}</span>{line.text}
             </div>
-          </button>
-          <button className="w-10 h-10 rounded-full bg-[#EF4444] text-white flex items-center justify-center shadow-sm hover:scale-105 transition-all">
-            <div className="w-3 h-3 bg-white rounded-xs" />
-          </button>
-          <button className="w-10 h-10 rounded-full border border-white/20 text-white flex items-center justify-center hover:bg-white/10 transition-all">
-            <RotateCw size={14} />
-          </button>
+          ))}
+        </pre>
+      </div>
+
+      {/* Graph path */}
+      <div>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontFamily: 'var(--app-font-mono)', marginBottom: 8 }}>ATTACK PATH</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
+          {(data.graphPath ?? []).map((node: string, i: number) => (
+            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <span className="graph-node">{node}</span>
+              {i < data.graphPath.length - 1 && <ArrowRight size={10} color="var(--text-tertiary)" />}
+            </span>
+          ))}
         </div>
       </div>
     </div>
-
-    {/* Row with Action Item, Posture Progress, and Targets */}
-    <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-      {/* 6. Security Action Item card */}
-      <div className="rounded-2xl border border-[#E5EAE7] bg-white p-5 shadow-2xs flex flex-col justify-between min-h-[280px]">
-        <div>
-          <div className="flex items-center justify-between w-full">
-            <span className="text-gray-400 text-[10px] tracking-wider font-semibold">SECURITY ACTION ITEM</span>
-            <span className="bg-rose-50 text-rose-600 border border-rose-100 text-[9px] font-bold px-2 py-0.5 rounded-full">
-              HIGH PRIORITY
-            </span>
-          </div>
-          <h3 className="text-gray-900 text-sm font-bold mt-3 leading-snug">
-            Timing Side-Channel Information Leakage in Token Verification
-          </h3>
-          <p className="text-gray-500 text-[11px] font-mono mt-1">
-            Target: src/auth/token_compare.cpp : compare_token()
-          </p>
-          <div className="bg-[#FFF1F2] border border-[#FFE4E6] rounded-xl p-3.5 text-xs text-[#E11D48] leading-relaxed mt-4">
-            <b>TVLA Welch t-test = {tValue} (|t| &gt; 4.5).</b> Exploitable early-exit timing leak requires AI patch application.
-          </div>
-        </div>
-        <Link href="/patches" className="mt-4 bg-[#0F5132] hover:bg-[#0A3824] text-white flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold w-full transition-all shadow-2xs hover:shadow-sm shrink-0">
-          <Wrench size={13} />
-          <span>Apply AI Patch & Verify</span>
-        </Link>
-      </div>
-
-      {/* 7. Security Posture Progress gauge */}
-      <div className="rounded-2xl border border-[#E5EAE7] bg-white p-5 shadow-2xs flex flex-col justify-between min-h-[280px]">
-        <div>
-          <div className="flex items-center justify-between w-full">
-            <h2 className="text-gray-900 text-sm font-bold">Security Posture Progress</h2>
-            <span className="bg-[#ECFDF5] text-[#10B981] border border-[#ECFDF5] text-[9px] font-bold px-2 py-0.5 rounded-full">
-              6/6 Vectors
-            </span>
-          </div>
-          <div className="relative flex flex-col items-center justify-center mt-6">
-            <svg viewBox="0 0 100 50" className="w-40 h-20">
-              <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#E5EAE7" strokeWidth="10" strokeLinecap="round" />
-              <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#10B981" strokeWidth="10" strokeLinecap="round" strokeDasharray="125.6" strokeDashoffset={125.6 * (1 - remediatedPercent / 100)} className="transition-all duration-500" />
-            </svg>
-            <div className="absolute bottom-1 text-center">
-              <div className="text-2xl font-bold text-gray-900">{remediatedPercent}%</div>
-              <div className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold">Targets Remediated</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex justify-center items-center gap-4 text-[10px] text-gray-500 border-t border-[#E5EAE7] pt-3 mt-4 shrink-0">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#0F5132]" />
-            <span>Verified ({remediatedPercent}%)</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#10B981]" />
-            <span>In Progress</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-gray-300" />
-            <span>Pending</span>
-          </span>
-        </div>
-      </div>
-
-      {/* 8. Security Targets list */}
-      <div className="rounded-2xl border border-[#E5EAE7] bg-white p-5 shadow-2xs flex flex-col justify-between min-h-[280px]">
-        <div className="w-full">
-          <div className="flex items-center justify-between w-full">
-            <h2 className="text-gray-900 text-sm font-bold">Security Targets</h2>
-            <Link href="/analysis" className="border border-[#E5EAE7] bg-white text-gray-500 rounded-lg px-2 py-0.5 text-[10px] font-bold hover:bg-gray-50 hover:text-gray-900 transition-all">
-              + + New
-            </Link>
-          </div>
-          <div className="space-y-3 mt-4 overflow-y-auto max-h-[185px] pr-1">
-            {projectsData.map((project: any) => {
-              const meta = getProjectMetadata(project, findingsData);
-              const ProjectIcon = meta.icon;
-              return <div key={project.id} className={cx(
-                'p-3 rounded-xl border flex items-center justify-between gap-3 transition-all',
-                meta.isVulnerable ? 'border-rose-100 bg-rose-50/10' : 'border-[#E5EAE7] bg-white'
-              )}>
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className={cx(
-                    'w-7 h-7 rounded-lg flex items-center justify-center shrink-0',
-                    meta.isVulnerable ? 'bg-rose-50 text-rose-500' : 'bg-[#EAF2ED] text-[#0F5132]'
-                  )}>
-                    <ProjectIcon size={14} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-bold text-gray-900 truncate">{project.name}</span>
-                      <span className={cx(
-                        'text-[8px] font-bold px-1.5 py-0.2 rounded-full uppercase border tracking-wider',
-                        meta.isVulnerable ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                      )}>
-                        {meta.badgeText}
-                      </span>
-                    </div>
-                    <div className="text-[9px] text-gray-400 truncate mt-0.5">{meta.subtext}</div>
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className={cx('font-mono text-[10px] font-semibold', meta.isVulnerable ? 'text-[#E11D48]' : 'text-gray-400')}>
-                    {meta.criticalCount} critical
-                  </div>
-                </div>
-              </div>;
-            })}
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>;
+  );
 }
 
-function Runs({ runs }: { runs: any[] }) { return runs.length ? <div className="overflow-x-auto"><div className="min-w-[690px]"><div className="grid grid-cols-[1.4fr_1fr_1fr_90px_90px] gap-4 border-b border-[#E5EAE7] pb-3 text-[10px] font-bold uppercase tracking-wider text-gray-400 font-mono"><span>Target</span><span>Stage</span><span>Updated</span><span>Progress</span><span>State</span></div>{runs.map((run: any) => <div key={run.id} data-testid={`row-run-${run.id}`} className="grid grid-cols-[1.4fr_1fr_1fr_90px_90px] items-center gap-4 border-b border-[#F1F5F2] py-4 text-xs last:border-0"><div className="flex items-center gap-3"><div className="grid h-8 w-8 place-items-center rounded-lg bg-[#EAF2ED] text-[#0F5132]"><Code2 size={15} /></div><div><div className="font-bold text-gray-900">{run.projectName}</div><div className="font-mono text-[10px] text-gray-400">{run.id}</div></div></div><span className="text-gray-700">{title(run.currentStage)}</span><span className="font-mono text-[10px] text-gray-500">{run.updatedAt ? new Date(run.updatedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}</span><div className="flex items-center gap-2"><div className="w-12"><MiniBar value={run.progress ?? 0} /></div><span className="font-mono text-[10px]">{run.progress ?? 0}%</span></div><StatusPill value={run.status} /></div>)}</div></div> : <Empty label="No analysis runs yet" action={<Link href="/analysis" data-testid="link-empty-start-analysis" className="mt-4 inline-flex rounded-lg bg-[#0F5132] hover:bg-[#0A3824] px-3 py-2 text-xs font-bold text-white transition-all">Register a target</Link>} />; }
-
-function AnalysisPage() {
-  const projects = useListProjects(); const runs = useListAnalysisRuns(); const createProject = useCreateProject(); const createRun = useCreateAnalysisRun(); const qc = useQueryClient();
-  const [projectId, setProjectId] = useState(''); const [name, setName] = useState(''); const [language, setLanguage] = useState('C++'); const [targetType, setTargetType] = useState('source'); const [selected, setSelected] = useState<string[]>(['cpg', 'gnn', 'asan']); const [fileName, setFileName] = useState('');
-  const list = (projects.data as any[]) ?? []; const runList = (runs.data as any[]) ?? [];
-  const submit = (event: FormEvent) => { event.preventDefault(); if (projectId) createRun.mutate({ data: { projectId, modules: selected } as any }, { onSuccess: () => { qc.invalidateQueries({ queryKey: getListAnalysisRunsQueryKey() }); qc.invalidateQueries({ queryKey: getGetOverviewQueryKey() }); } }); else createProject.mutate({ data: { name, language, targetType, description: fileName ? `Registered from ${fileName}` : 'Target registered in VARUNA' } as any }, { onSuccess: (project: any) => { setProjectId(project.id); createRun.mutate({ data: { projectId: project.id, modules: selected } as any }, { onSuccess: () => { qc.invalidateQueries({ queryKey: getListAnalysisRunsQueryKey() }); qc.invalidateQueries({ queryKey: getGetOverviewQueryKey() }); } }); } }); };
-  return <div className="animate-rise"><Header eyebrow="Target intake / autonomous analysis" heading="Analysis workspace" sub="Register a source or binary target, choose the evidence modules, and open a traceable run." />
-    <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800"><span className="font-bold">Prototype boundary.</span> Target intake and run controls are connected to the API. Engine output shown below is only displayed after the server returns it.</div>
-    <div className="grid gap-5 xl:grid-cols-[.85fr_1.15fr]"><Section title="Register target" meta={<span className="font-mono text-[10px] text-gray-500">STEP 01 / 02</span>}><form onSubmit={submit} className="space-y-4"><label className="block text-xs font-bold text-gray-900">Existing target<select value={projectId} onChange={(e) => setProjectId(e.target.value)} data-testid="select-analysis-project" className="mt-2 h-11 w-full rounded-xl border border-[#E5EAE7] bg-[#F8FAF9] px-3 text-sm outline-none focus:border-[#0F5132]"><option value="">Register a new target</option>{list.map((p: any) => <option key={p.id} value={p.id}>{p.name} · {p.language}</option>)}</select></label><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-bold text-gray-900">Target name<input value={name} onChange={(e) => setName(e.target.value)} required={!projectId} data-testid="input-target-name" placeholder="e.g. libwire parser" className="mt-2 h-11 w-full rounded-xl border border-[#E5EAE7] bg-[#F8FAF9] px-3 text-sm outline-none focus:border-[#0F5132]" /></label><label className="text-xs font-bold text-gray-900">Language<select value={language} onChange={(e) => setLanguage(e.target.value)} data-testid="select-target-language" className="mt-2 h-11 w-full rounded-xl border border-[#E5EAE7] bg-[#F8FAF9] px-3 text-sm outline-none focus:border-[#0F5132]"><option>C++</option><option>C</option><option>Rust</option><option>Binary</option></select></label></div><label className="text-xs font-bold text-gray-900">Target kind<select value={targetType} onChange={(e) => setTargetType(e.target.value)} data-testid="select-target-type" className="mt-2 h-11 w-full rounded-xl border border-[#E5EAE7] bg-[#F8FAF9] px-3 text-sm outline-none focus:border-[#0F5132]"><option value="source">Source tree</option><option value="binary">Compiled binary</option><option value="protocol">Protocol endpoint</option></select></label><label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-[#E5EAE7] bg-[#F8FAF9] p-6 text-center hover:border-[#0F5132] transition-all"><UploadCloud className="mb-2 text-[#0F5132]" size={22} /><span className="text-xs font-bold text-[#0F5132]">{fileName || 'Attach target metadata'}</span><span className="mt-1 text-[10px] text-gray-500">File reference only in this prototype</span><input type="file" onChange={(e) => setFileName(e.target.files?.[0]?.name ?? '')} data-testid="input-target-file" className="hidden" /></label><Button type="submit" disabled={createProject.isPending || createRun.isPending || (!projectId && !name)} data-testid="button-start-analysis" className="w-full rounded-xl bg-[#0F5132] hover:bg-[#0A3824] text-white transition-all">{createProject.isPending || createRun.isPending ? 'Opening run...' : <><Play size={15} />Open analysis run</>}</Button></form></Section>
-      <Section title="Evidence modules" meta={<span className="text-[10px] text-gray-500">Select at least one</span>}><div className="grid gap-3 sm:grid-cols-2">{modules.map((module) => <button type="button" key={module} onClick={() => setSelected((old) => old.includes(module) ? old.filter((x) => x !== module) : [...old, module])} data-testid={`button-module-${module}`} className={cx('flex items-center gap-3 rounded-xl border p-4 text-left transition-all', selected.includes(module) ? 'border-[#0F5132] bg-[#EAF2ED] text-[#0F5132]' : 'border-[#E5EAE7] bg-[#F8FAF9] text-gray-500 hover:border-gray-300')}><div className={cx('grid h-9 w-9 place-items-center rounded-lg transition-all', selected.includes(module) ? 'bg-[#0F5132] text-white' : 'bg-[#E5EAE7] text-gray-500')}>{selected.includes(module) ? <Check size={16} /> : <span className="font-mono text-xs">{module.slice(0, 2).toUpperCase()}</span>}</div><div><div className="text-xs font-bold">{title(module)}</div><div className="mt-1 text-[10px] leading-relaxed text-gray-500">{module === 'cpg' ? 'Code property graph extraction' : module === 'gnn' ? 'Graph-guided prioritization' : module === 'timing' ? 'Welch t-test side-channel scan' : module === 'protocol' ? 'Mutation campaign' : `${title(module)} instrumentation`}</div></div></button>)}</div><div className="mt-8 rounded-xl bg-[#F8FAF9] border border-[#E5EAE7] p-4"><div className="flex items-center gap-2 text-xs font-bold text-gray-900"><Sparkles size={15} className="text-[#B27B18]" />Run order</div><div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-mono text-gray-500">{selected.map((m, i) => <span key={m} className="flex items-center gap-2"><span className="rounded-md bg-white border border-[#E5EAE7] px-2 py-1 text-[#0F5132]">{m}</span>{i < selected.length - 1 && <ChevronRight size={12} className="text-gray-400" />}</span>)}</div></div><div className="mt-6"><div className="mb-3 text-xs font-bold text-gray-900">Latest runs</div>{runs.isLoading ? <Loading label="Loading runs" /> : runs.isError ? <ErrorState retry={() => runs.refetch()} /> : <Runs runs={runList.slice(0, 4)} />}</div></Section></div>
-  </div>;
-}
-
-function TimingPage() {
-  const q = useListTimingTests(); const projects = useListProjects(); const create = useCreateTimingTest(); const qc = useQueryClient(); const [projectId, setProjectId] = useState(''); const [fn, setFn] = useState('constant_time_compare'); const [samples, setSamples] = useState('10000');
-  const submit = (e: FormEvent) => { e.preventDefault(); create.mutate({ data: { projectId, function: fn, samples: Number(samples) } as any }, { onSuccess: () => { qc.invalidateQueries({ queryKey: getListTimingTestsQueryKey() }); } }); };
-  const tests = (q.data as any[]) ?? []; return <div className="animate-rise"><Header eyebrow="Side-channel lab / Welch t-test" heading="Timing channels" sub="Measure whether secret-dependent execution paths leave a statistically meaningful timing signal." action={<div className="flex items-center gap-2 rounded-xl border border-[#E5EAE7] bg-white px-3 py-2 text-[11px] text-gray-500 shadow-2xs"><TestTube2 size={15} className="text-[#0F5132]" />Welch threshold <b className="font-mono">|t| ≥ 4.5</b></div>} /><div className="grid gap-5 xl:grid-cols-[.7fr_1.3fr]"><Section title="Run timing test" meta={<span className="font-mono text-[10px] text-gray-500">MIN 100 SAMPLES</span>}><form onSubmit={submit} className="space-y-4"><label className="block text-xs font-bold text-gray-900">Target<select value={projectId} onChange={(e) => setProjectId(e.target.value)} required data-testid="select-timing-project" className="mt-2 h-11 w-full rounded-xl border border-[#E5EAE7] bg-[#F8FAF9] px-3 text-sm outline-none focus:border-[#0F5132]">{((projects.data as any[]) ?? []).map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label className="block text-xs font-bold text-gray-900">Function under test<input value={fn} onChange={(e) => setFn(e.target.value)} required data-testid="input-timing-function" className="mt-2 h-11 w-full rounded-xl border border-[#E5EAE7] bg-[#F8FAF9] px-3 text-sm font-mono outline-none focus:border-[#0F5132]" /></label><label className="block text-xs font-bold text-gray-900">Sample count<input type="number" min="100" value={samples} onChange={(e) => setSamples(e.target.value)} data-testid="input-timing-samples" className="mt-2 h-11 w-full rounded-xl border border-[#E5EAE7] bg-[#F8FAF9] px-3 text-sm font-mono outline-none focus:border-[#0F5132]" /></label><Button disabled={create.isPending} data-testid="button-run-timing" className="w-full rounded-xl bg-[#0F5132] hover:bg-[#0A3824] text-white transition-all"><Play size={15} />{create.isPending ? 'Collecting samples...' : 'Run side-channel test'}</Button></form><div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-[11px] leading-relaxed text-amber-800"><b>Interpretation note.</b> A potential leakage result is a review signal, not a confirmed vulnerability. Compare before and after patch measurements.</div></Section><Section title="Test evidence" meta={<span className="font-mono text-[10px] text-gray-500">{tests.length} RECORDED</span>}>{q.isLoading ? <Loading /> : q.isError ? <ErrorState retry={() => q.refetch()} /> : tests.length ? <div className="space-y-3">{tests.map((test: any) => <div key={test.id} data-testid={`card-timing-${test.id}`} className="rounded-xl border border-[#E5EAE7] bg-white p-4 shadow-2xs hover:shadow-sm transition-all"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-sm font-bold text-gray-900"><Code2 size={15} className="text-[#0F5132]" />{test.function}</div><div className="mt-1 text-[10px] text-gray-500">{test.projectName} · {title(test.beforeAfter)} · {fmt(test.createdAt)}</div></div><StatusPill value={test.result} /></div><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4"><div><div className="text-[10px] uppercase tracking-widest text-gray-400">Samples</div><div className="mt-1 font-mono text-sm text-gray-900 font-semibold">{fmt(test.samples)}</div></div><div><div className="text-[10px] uppercase tracking-widest text-gray-400">Groups</div><div className="mt-1 font-mono text-sm text-gray-900">{fmt(test.groups)}</div></div><div><div className="text-[10px] uppercase tracking-widest text-gray-400">Statistic</div><div className="mt-1 font-mono text-sm font-bold text-gray-900">{Number(test.statistic ?? 0).toFixed(2)}</div></div><div><div className="text-[10px] uppercase tracking-widest text-gray-400">Threshold</div><div className="mt-1 font-mono text-sm text-gray-900">{Number(test.threshold ?? 0).toFixed(2)}</div></div></div></div>)}</div> : <Empty label="No timing tests recorded" />}</Section></div></div>;
-}
-
-function ProtocolPage() {
-  const q = useListProtocolTests(); const projects = useListProjects(); const create = useCreateProtocolTest(); const qc = useQueryClient(); const [projectId, setProjectId] = useState(''); const [target, setTarget] = useState('decode_frame'); const [strategy, setStrategy] = useState<string[]>(['bit flips', 'boundary values', 'length mutations']);
-  const submit = (e: FormEvent) => { e.preventDefault(); create.mutate({ data: { projectId, target, strategy } as any }, { onSuccess: () => qc.invalidateQueries({ queryKey: getListProtocolTestsQueryKey() }) }); };
-  const tests = (q.data as any[]) ?? []; return <div className="animate-rise"><Header eyebrow="Mutation lab / custom binary" heading="Protocol fuzzing" sub="Exercise parser boundaries with intentional mutations, then preserve coverage and crash evidence." action={<div className="rounded-xl bg-[#EAF2ED] px-3 py-2 text-[11px] font-bold text-[#0F5132]"><Activity size={14} className="mr-1 inline text-[#0F5132]" />Campaigns are evidence-producing</div>} /><div className="grid gap-5 xl:grid-cols-[.7fr_1.3fr]"><Section title="Configure campaign" meta={<span className="font-mono text-[10px] text-gray-500">MUTATION PLAN</span>}><form onSubmit={submit} className="space-y-4"><label className="block text-xs font-bold text-gray-900">Target<select required value={projectId} onChange={(e) => setProjectId(e.target.value)} data-testid="select-protocol-project" className="mt-2 h-11 w-full rounded-xl border border-[#E5EAE7] bg-[#F8FAF9] px-3 text-sm outline-none focus:border-[#0F5132]"><option value="">Choose a target</option>{((projects.data as any[]) ?? []).map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label><label className="block text-xs font-bold text-gray-900">Parser or message target<input value={target} onChange={(e) => setTarget(e.target.value)} required data-testid="input-protocol-target" className="mt-2 h-11 w-full rounded-xl border border-[#E5EAE7] bg-[#F8FAF9] px-3 text-sm font-mono outline-none focus:border-[#0F5132]" /></label><div><div className="mb-2 text-xs font-bold text-gray-900">Mutation strategies</div><div className="space-y-2">{['bit flips', 'boundary values', 'length mutations', 'dictionary tokens'].map((s) => <label key={s} className="flex items-center gap-3 rounded-lg border border-[#E5EAE7] bg-[#F8FAF9] p-3 text-xs text-gray-700 hover:border-gray-300 transition-all cursor-pointer"><input type="checkbox" checked={strategy.includes(s)} onChange={() => setStrategy((old) => old.includes(s) ? old.filter((x) => x !== s) : [...old, s])} data-testid={`input-strategy-${s.replaceAll(' ', '-')}`} className="accent-[#0F5132]" />{s}</label>)}</div></div><Button disabled={create.isPending} data-testid="button-run-protocol" className="w-full rounded-xl bg-[#0F5132] hover:bg-[#0A3824] text-white transition-all"><Zap size={15} />{create.isPending ? 'Starting campaign...' : 'Start mutation campaign'}</Button></form></Section><Section title="Campaign history" meta={<span className="font-mono text-[10px] text-gray-500">{tests.length} CAMPAIGNS</span>}>{q.isLoading ? <Loading /> : q.isError ? <ErrorState retry={() => q.refetch()} /> : tests.length ? <div className="space-y-3">{tests.map((test: any) => <div key={test.id} data-testid={`card-protocol-${test.id}`} className="rounded-xl border border-[#E5EAE7] bg-white p-4 shadow-2xs hover:shadow-sm transition-all"><div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-sm font-bold text-gray-900"><Binary size={15} className="text-[#0F5132]" />{test.target}</div><div className="mt-1 text-[10px] text-gray-500">{test.projectName} · {test.fields?.join(', ') || 'fields pending'}</div></div><StatusPill value={test.state} /></div><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4"><div><div className="text-[10px] uppercase tracking-widest text-gray-400">Inputs</div><div className="mt-1 font-mono text-sm text-gray-900 font-semibold">{fmt(test.inputs)}</div></div><div><div className="text-[10px] uppercase tracking-widest text-gray-400">Coverage</div><div className="mt-1 font-mono text-sm text-gray-900">{test.coverage ?? 0}%</div></div><div><div className="text-[10px] uppercase tracking-widest text-gray-400">Crashes</div><div className="mt-1 font-mono text-sm text-gray-900">{fmt(test.crashes)}</div></div><div><div className="text-[10px] uppercase tracking-widest text-gray-400">Unique</div><div className="mt-1 font-mono text-sm font-bold text-[#E11D48]">{fmt(test.uniqueCrashes)}</div></div></div></div>)}</div> : <Empty label="No protocol campaigns recorded" />}</Section></div></div>;
-}
-
-function FindingsPage() {
-  const q = useListFindings(); const [selectedId, setSelectedId] = useState(''); const findings = (q.data as any[]) ?? []; const detail = useGetFinding(selectedId, { query: { enabled: !!selectedId, queryKey: [`/api/findings/${selectedId}`] } as any });
-  return <div className="animate-rise"><Header eyebrow="Central evidence ledger" heading="Findings" sub="Prioritized signals with code, graph paths, and method context. Select a finding to inspect the evidence chain." /><div className="grid gap-5 xl:grid-cols-[.95fr_1.05fr]"><Section title="Finding queue" meta={<div className="flex items-center gap-2"><SlidersHorizontal size={14} className="text-gray-400" /><span className="font-mono text-[10px] text-gray-500">{findings.length} TOTAL</span></div>}>{q.isLoading ? <Loading /> : q.isError ? <ErrorState retry={() => q.refetch()} /> : findings.length ? <div className="space-y-2">{findings.map((finding: any) => <button key={finding.id} onClick={() => setSelectedId(finding.id)} data-testid={`button-finding-${finding.id}`} className={cx('w-full rounded-xl border p-4 text-left transition-all', selectedId === finding.id ? 'border-[#0F5132] bg-[#EAF2ED] text-[#0F5132]' : 'border-[#E5EAE7] bg-[#F8FAF9] text-gray-700 hover:border-gray-300')}><div className="flex items-start justify-between gap-3"><div><div className="text-xs font-bold leading-relaxed text-gray-900">{finding.title}</div><div className="mt-1 font-mono text-[10px] text-gray-500">{finding.file}:{finding.line} · {finding.function}</div></div><StatusPill value={finding.severity} /></div><div className="mt-3 flex items-center justify-between text-[10px] text-gray-500"><span>{finding.cwe} · {finding.method}</span><span className="font-mono font-bold text-[#0F5132]">GNN {Math.round((finding.score ?? 0) * 100)}%</span></div></button>)}</div> : <Empty label="No findings recorded" />}</Section><Section title="Evidence detail" meta={selectedId && <span className="font-mono text-[10px] text-gray-500">{selectedId}</span>}>{!selectedId ? <div className="flex min-h-[360px] flex-col items-center justify-center text-center"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#EAF2ED] text-[#0F5132]"><Network size={21} /></div><div className="mt-4 text-sm font-bold text-gray-900">Select a finding</div><p className="mt-1 max-w-xs text-xs leading-relaxed text-gray-500">Code context, evidence statements, and graph traversal will appear here.</p></div> : detail.isLoading ? <Loading label="Loading finding evidence" /> : detail.isError ? <ErrorState retry={() => detail.refetch()} /> : <FindingDetail data={detail.data as any} />}</Section></div></div>;
-}
-function FindingDetail({ data }: { data: any }) { return <div data-testid={`panel-finding-detail-${data.id}`}><div className="flex flex-wrap items-start justify-between gap-3"><div><StatusPill value={data.severity} /><h3 className="mt-3 text-lg font-bold tracking-tight text-gray-900">{data.title}</h3><p className="mt-1 text-xs text-gray-500">{data.cwe} · detected via {data.method}</p></div><div className="rounded-xl bg-[#EAF2ED] px-3 py-2 text-center"><div className="font-mono text-xl font-bold text-[#0F5132]">{Math.round((data.score ?? 0) * 100)}%</div><div className="text-[9px] uppercase tracking-widest text-[#0F5132] font-semibold">GNN priority</div></div></div><div className="my-5 grid grid-cols-2 gap-3 text-xs"><div className="rounded-lg bg-[#F8FAF9] border border-[#E5EAE7] p-3"><span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Location</span><div className="mt-1 font-mono text-gray-900">{data.file}:{data.line}</div></div><div className="rounded-lg bg-[#F8FAF9] border border-[#E5EAE7] p-3"><span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Function</span><div className="mt-1 font-mono text-gray-900">{data.function}</div></div></div><div className="mb-5"><div className="mb-2 text-[11px] font-bold uppercase tracking-widest text-gray-400">Evidence statements</div><div className="space-y-2">{(data.evidence ?? []).map((e: string, i: number) => <div key={i} className="flex gap-3 rounded-lg bg-[#F8FAF9] border border-[#E5EAE7] p-3 text-xs leading-relaxed text-gray-700"><span className="font-mono font-bold text-[#0F5132]">0{i + 1}</span>{e}</div>)}</div></div><div className="mb-5"><div className="mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-400"><FileCode2 size={13} />Code context</div><pre className="overflow-x-auto rounded-xl bg-[#0F172A] p-4 text-[11px] leading-6 text-slate-200 font-mono">{(data.code ?? []).map((line: any) => <div key={line.line} className={line.highlighted ? 'rounded bg-rose-950/40 text-rose-200 border-l-2 border-rose-500 pl-2' : 'pl-2'}><span className="mr-4 inline-block w-7 text-right text-slate-500 select-none font-mono">{line.line}</span>{line.text}</div>)}</pre></div><div><div className="mb-2 text-[11px] font-bold uppercase tracking-widest text-gray-400">Graph path</div><div className="flex flex-wrap items-center gap-2">{(data.graphPath ?? []).map((node: string, i: number) => <span key={i} className="flex items-center gap-2 text-[10px]"><span className="rounded-md border border-[#E5EAE7] bg-[#F8FAF9] px-2 py-1 font-mono text-gray-700">{node}</span>{i < data.graphPath.length - 1 && <ChevronRight size={12} className="text-gray-400" />}</span>)}</div></div></div>; }
-
+/* ────────────────────────────────────────────────────────────
+   PATCHES PAGE — Patch Review & Re-Verification
+   ──────────────────────────────────────────────────────────── */
 function PatchesPage({ verification = false }: { verification?: boolean }) {
-  const q = useListPatches(); const verify = useVerifyPatch(); const [active, setActive] = useState<string | null>(null); const [run, setRun] = useState<any>(null);
-  const patches = (q.data as any[]) ?? []; const selected = patches.find((p) => p.id === active);
-  const verifyOne = (id: string) => verify.mutate({ id }, { onSuccess: (result: any) => { setRun(result); } });
-  return <div className="animate-rise"><Header eyebrow={verification ? 'Re-verification lab / before + after' : 'Review queue / proposed changes'} heading={verification ? 'Re-verification' : 'Patch review'} sub={verification ? 'Re-run security checks against proposed changes and keep the before/after state visible.' : 'Review minimal changes against the original code before asking VARUNA to verify them.'} /><div className="grid gap-5 xl:grid-cols-[.76fr_1.24fr]"><Section title={verification ? 'Verification queue' : 'Patch proposals'} meta={<span className="font-mono text-[10px] text-gray-500">{patches.length} PROPOSALS</span>}>{q.isLoading ? <Loading /> : q.isError ? <ErrorState retry={() => q.refetch()} /> : patches.length ? <div className="space-y-2">{patches.map((patch: any) => <button key={patch.id} onClick={() => setActive(patch.id)} data-testid={`button-patch-${patch.id}`} className={cx('w-full rounded-xl border p-4 text-left transition-all', active === patch.id ? 'border-[#0F5132] bg-[#EAF2ED] text-[#0F5132]' : 'border-[#E5EAE7] bg-[#F8FAF9] text-gray-700 hover:border-gray-400')}><div className="flex items-start justify-between gap-2"><div className="text-xs font-bold text-gray-900">{patch.title}</div><StatusPill value={patch.status} /></div><div className="mt-2 text-[10px] text-gray-500 font-mono">{patch.findingId} · {title(patch.source)}</div></button>)}</div> : <Empty label="No patch proposals recorded" />}</Section><Section title={verification ? 'Before / after checks' : 'Code diff review'} meta={selected && <span className="font-mono text-[10px] text-gray-500">{selected.id}</span>}>{!selected ? <div className="flex min-h-[360px] flex-col items-center justify-center text-center"><div className="grid h-12 w-12 place-items-center rounded-2xl bg-[#EAF2ED] text-[#0F5132]">{verification ? <ShieldCheck size={22} /> : <GitBranch size={22} />}</div><div className="mt-4 text-sm font-bold text-gray-900">Select a patch proposal</div><p className="mt-1 max-w-xs text-xs leading-relaxed text-gray-500">The full change and verification action stay together so no evidence gets lost.</p></div> : <div><div className="mb-4"><h3 className="text-lg font-bold text-gray-900">{selected.title}</h3><p className="mt-1 text-xs text-gray-500">{selected.explanation}</p></div><div className="grid gap-3 md:grid-cols-2"><div><div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-[#E11D48] font-mono">Original</div><pre className="min-h-[180px] overflow-x-auto rounded-xl bg-rose-950/30 text-rose-200 border border-rose-900/50 p-4 text-[11px] leading-6 font-mono">{selected.originalCode}</pre></div><div><div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-[#10B981] font-mono">Proposed</div><pre className="min-h-[180px] overflow-x-auto rounded-xl bg-emerald-950/30 text-emerald-200 border border-emerald-900/50 p-4 text-[11px] leading-6 font-mono">{selected.proposedCode}</pre></div></div><Button onClick={() => verifyOne(selected.id)} disabled={verify.isPending} data-testid={`button-verify-patch-${selected.id}`} className="mt-5 rounded-xl bg-[#0F5132] hover:bg-[#0A3824] text-white transition-all">{verify.isPending ? 'Running checks...' : <><ShieldCheck size={15} />Run security verification</>}</Button>{run && <div data-testid="panel-verification-result" className="mt-5 rounded-xl border border-emerald-200 bg-[#ECFDF5] p-4 text-[#0F5132]"><div className="flex items-center justify-between"><div className="text-xs font-bold text-gray-900">Verification run {run.id}</div><StatusPill value={run.overall} /></div><div className="mt-3 space-y-2">{(run.checks ?? []).map((check: any) => <div key={check.label} className="flex items-center justify-between border-t border-emerald-100/50 pt-2 text-xs"><span>{check.label}</span><StatusPill value={check.state} /></div>)}</div></div>}</div>}</Section></div></div>;
+  const q       = useListPatches();
+  const verify  = useVerifyPatch();
+  const [active, setActive] = useState<string | null>(null);
+  const [run, setRun]       = useState<any>(null);
+
+  const patches  = (q.data as any[]) ?? [];
+  const selected = patches.find(p => p.id === active);
+
+  const verifyOne = (id: string) => {
+    verify.mutate({ id }, { onSuccess: (result: any) => setRun(result) });
+  };
+
+  const eyebrow = verification ? 'RE-VERIFICATION LAB · BEFORE + AFTER' : 'REVIEW QUEUE · PROPOSED CHANGES';
+  const heading  = verification ? 'Re-Verification' : 'Patch Review';
+  const sub      = verification
+    ? 'Re-run security checks against proposed changes and keep the before/after state visible.'
+    : 'Review minimal changes against the original code before asking VARUNA to verify them.';
+
+  return (
+    <div className="animate-rise" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <PageHeader eyebrow={eyebrow} heading={heading} sub={sub} />
+      <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 12 }}>
+        {/* Patch list */}
+        <div className="op-panel">
+          <SectionLabel
+            label={verification ? 'VERIFICATION QUEUE' : 'PATCH PROPOSALS'}
+            meta={<span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>{patches.length} PROPOSALS</span>}
+          />
+          <div style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 260px)' }}>
+            {q.isLoading ? <div style={{ padding: 14 }}><Loading /></div> : q.isError ? <div style={{ padding: 14 }}><ErrorState retry={() => q.refetch()} /></div> : patches.length ? patches.map((patch: any) => {
+              const isActive = active === patch.id;
+              return (
+                <button
+                  key={patch.id}
+                  onClick={() => setActive(patch.id)}
+                  data-testid={`button-patch-${patch.id}`}
+                  style={{
+                    width: '100%', display: 'block', padding: '10px 14px', textAlign: 'left', cursor: 'pointer',
+                    background: isActive ? 'rgba(124,128,80,.07)' : 'transparent',
+                    border: 'none', borderBottom: '1px solid var(--border-subtle)', borderLeft: isActive ? '2px solid var(--accent-olive)' : '2px solid transparent',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{patch.title}</div>
+                    <StatusBadge value={patch.status} />
+                  </div>
+                  <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>{patch.findingId} · {title(patch.source ?? '')}</div>
+                </button>
+              );
+            }) : <Empty label="patch proposals" />}
+          </div>
+        </div>
+
+        {/* Detail panel */}
+        <div className="op-panel">
+          <SectionLabel
+            label={verification ? 'BEFORE / AFTER CHECKS' : 'CODE DIFF REVIEW'}
+            meta={selected && <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>{selected.id}</span>}
+          />
+          <div style={{ padding: 14 }}>
+            {!selected ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 320, textAlign: 'center', gap: 10 }}>
+                {verification ? <ShieldCheck size={24} color="var(--text-tertiary)" strokeWidth={1.4} /> : <GitBranch size={24} color="var(--text-tertiary)" strokeWidth={1.4} />}
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>SELECT A PATCH PROPOSAL</div>
+                <div style={{ fontSize: 10, color: 'var(--text-tertiary)', maxWidth: 280 }}>The full change and verification action stay together so no evidence gets lost.</div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                  <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 6px' }}>{selected.title}</h3>
+                  <p style={{ fontSize: 11, color: 'var(--text-secondary)', margin: 0 }}>{selected.explanation}</p>
+                </div>
+                {/* Diff */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--status-critical)', fontFamily: 'var(--app-font-mono)', marginBottom: 6 }}>ORIGINAL</div>
+                    <pre style={{ minHeight: 160, overflowX: 'auto', background: 'rgba(183,53,53,.06)', border: '1px solid rgba(183,53,53,.25)', borderRadius: 2, padding: '10px 12px', fontFamily: 'var(--app-font-mono)', fontSize: 10, lineHeight: 1.7, color: '#C4A0A0', margin: 0 }}>
+                      {selected.originalCode}
+                    </pre>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--status-success)', fontFamily: 'var(--app-font-mono)', marginBottom: 6 }}>PROPOSED</div>
+                    <pre style={{ minHeight: 160, overflowX: 'auto', background: 'rgba(98,123,85,.06)', border: '1px solid rgba(98,123,85,.25)', borderRadius: 2, padding: '10px 12px', fontFamily: 'var(--app-font-mono)', fontSize: 10, lineHeight: 1.7, color: '#A0B490', margin: 0 }}>
+                      {selected.proposedCode}
+                    </pre>
+                  </div>
+                </div>
+                {/* Verify button */}
+                <button
+                  onClick={() => verifyOne(selected.id)}
+                  disabled={verify.isPending}
+                  data-testid={`button-verify-patch-${selected.id}`}
+                  className="btn-primary"
+                  style={{ justifyContent: 'center' }}
+                >
+                  <ShieldCheck size={13} />
+                  {verify.isPending ? 'RUNNING CHECKS...' : 'RUN SECURITY VERIFICATION'}
+                </button>
+                {/* Verification result */}
+                {run && (
+                  <div data-testid="panel-verification-result" style={{ padding: '14px', background: 'rgba(98,123,85,.07)', border: '1px solid rgba(98,123,85,.3)', borderRadius: 3 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)' }}>VERIFICATION RUN · {run.id}</div>
+                      <StatusBadge value={run.overall} />
+                    </div>
+                    <div>
+                      {(run.checks ?? []).map((check: any, i: number) => (
+                        <div key={check.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: i === 0 ? 'none' : '1px solid rgba(98,123,85,.2)', fontSize: 11 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>{String(i+1).padStart(2,'0')}</span>
+                            <span style={{ color: 'var(--text-secondary)' }}>{check.label}</span>
+                          </div>
+                          <StatusBadge value={check.state} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
+/* ────────────────────────────────────────────────────────────
+   REPORTS PAGE
+   ──────────────────────────────────────────────────────────── */
 function ReportsPage() {
-  const q = useListReports(); const projects = useListProjects(); const create = useCreateReport(); const qc = useQueryClient(); const [projectId, setProjectId] = useState('');
-  const reports = (q.data as any[]) ?? []; const submit = (e: FormEvent) => { e.preventDefault(); create.mutate({ data: { projectId } as any }, { onSuccess: () => qc.invalidateQueries({ queryKey: getListReportsQueryKey() }) }); };
-  return <div className="animate-rise"><Header eyebrow="Evidence packages / export" heading="Reports" sub="Generate a concise, auditable package that carries findings, test results, patches, and verification state." action={<div className="rounded-xl border border-[#E5EAE7] bg-white px-3 py-2 text-[11px] text-gray-500 shadow-2xs"><FileText size={14} className="mr-1 inline text-[#0F5132]" />Evidence packages only</div>} /><div className="grid gap-5 xl:grid-cols-[.7fr_1.3fr]"><Section title="Generate report"><form onSubmit={submit} className="space-y-4"><label className="block text-xs font-bold text-gray-900">Target<select required value={projectId} onChange={(e) => setProjectId(e.target.value)} data-testid="select-report-project" className="mt-2 h-11 w-full rounded-xl border border-[#E5EAE7] bg-[#F8FAF9] px-3 text-sm outline-none focus:border-[#0F5132]"><option value="">Choose a target</option>{((projects.data as any[]) ?? []).map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label><div className="rounded-xl bg-[#F8FAF9] border border-[#E5EAE7] p-4 text-xs leading-relaxed text-gray-500">The generated package reflects data currently returned by the API. It never substitutes prototype values for live engine results.</div><Button disabled={create.isPending} data-testid="button-generate-report" className="w-full rounded-xl bg-[#0F5132] hover:bg-[#0A3824] text-white transition-all"><Download size={15} />{create.isPending ? 'Assembling evidence...' : 'Generate evidence report'}</Button></form></Section><Section title="Generated reports" meta={<span className="font-mono text-[10px] text-gray-500">{reports.length} REPORTS</span>}>{q.isLoading ? <Loading /> : q.isError ? <ErrorState retry={() => q.refetch()} /> : reports.length ? <div className="space-y-3">{reports.map((report: any) => <div key={report.id} data-testid={`row-report-${report.id}`} className="flex flex-col gap-4 rounded-xl border border-[#E5EAE7] bg-white p-4 sm:flex-row sm:items-center sm:justify-between hover:shadow-sm transition-all"><div className="flex items-center gap-3"><div className="grid h-9 w-9 place-items-center rounded-lg bg-[#EAF2ED] text-[#0F5132]"><FileText size={16} /></div><div><div className="text-xs font-bold text-gray-900">{report.projectName}</div><div className="mt-1 font-mono text-[10px] text-gray-500">{report.id} · {report.findingCount} findings · {report.generatedAt ? new Date(report.generatedAt).toLocaleDateString() : 'queued'}</div></div></div><div className="flex items-center gap-3"><StatusPill value={report.verificationStatus} /><StatusPill value={report.status} /></div></div>)}</div> : <Empty label="No evidence reports generated" />}</Section></div></div>;
+  const q        = useListReports();
+  const projects = useListProjects();
+  const create   = useCreateReport();
+  const qc       = useQueryClient();
+  const [projectId, setProjectId] = useState('');
+
+  const reports = (q.data as any[]) ?? [];
+  const submit  = (e: FormEvent) => {
+    e.preventDefault();
+    create.mutate({ data: { projectId } as any }, { onSuccess: () => qc.invalidateQueries({ queryKey: getListReportsQueryKey() }) });
+  };
+
+  return (
+    <div className="animate-rise" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <PageHeader
+        eyebrow="EVIDENCE PACKAGES · EXPORT"
+        heading="Reports"
+        sub="Generate a concise, auditable package that carries findings, test results, patches, and verification state."
+        action={
+          <div style={{ padding: '6px 12px', border: '1px solid var(--border-medium)', borderRadius: 3, background: 'var(--surface-1)', fontSize: 9, fontFamily: 'var(--app-font-mono)', color: 'var(--text-secondary)' }}>
+            <FileText size={11} style={{ display: 'inline', marginRight: 4 }} />
+            EVIDENCE PACKAGES ONLY
+          </div>
+        }
+      />
+      <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 12 }}>
+        <Panel title="GENERATE REPORT">
+          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-tertiary)', marginBottom: 6 }}>TARGET</label>
+              <select required value={projectId} onChange={e => setProjectId(e.target.value)} data-testid="select-report-project" className="op-select">
+                <option value="">Choose a target</option>
+                {((projects.data as any[]) ?? []).map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div style={{ padding: '10px 12px', background: 'var(--surface-1)', border: '1px solid var(--border-subtle)', borderRadius: 2, fontSize: 10, color: 'var(--text-tertiary)', lineHeight: 1.6 }}>
+              The generated package reflects data currently returned by the API. It never substitutes prototype values for live engine results.
+            </div>
+            <button disabled={create.isPending} data-testid="button-generate-report" className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+              <Download size={12} />
+              {create.isPending ? 'ASSEMBLING EVIDENCE...' : 'GENERATE EVIDENCE REPORT'}
+            </button>
+          </form>
+        </Panel>
+        <Panel title="GENERATED REPORTS" meta={<span style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)' }}>{reports.length} REPORTS</span>}>
+          {q.isLoading ? <Loading /> : q.isError ? <ErrorState retry={() => q.refetch()} /> : reports.length ? (
+            <div>
+              {reports.map((report: any) => (
+                <div key={report.id} data-testid={`row-report-${report.id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--border-subtle)', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', border: '1px solid var(--border-medium)', borderRadius: 2, flexShrink: 0 }}>
+                      <FileText size={13} color="var(--accent-olive)" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>{report.projectName}</div>
+                      <div style={{ fontFamily: 'var(--app-font-mono)', fontSize: 9, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                        {report.id} · {report.findingCount} findings · {report.generatedAt ? new Date(report.generatedAt).toLocaleDateString() : 'queued'}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <StatusBadge value={report.verificationStatus} />
+                    <StatusBadge value={report.status} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : <Empty label="reports" />}
+        </Panel>
+      </div>
+    </div>
+  );
 }
 
-function Router() { return <Shell><Switch><Route path="/" component={OverviewRedirect} /><Route path="/overview" component={OverviewPage} /><Route path="/analysis" component={AnalysisPage} /><Route path="/timing" component={TimingPage} /><Route path="/protocol" component={ProtocolPage} /><Route path="/findings" component={FindingsPage} /><Route path="/patches" component={() => <PatchesPage />} /><Route path="/verification" component={() => <PatchesPage verification />} /><Route path="/reports" component={ReportsPage} /><Route component={NotFound} /></Switch></Shell>; }
-function OverviewRedirect() { const [, setLocation] = useLocation(); useEffect(() => setLocation('/overview'), [setLocation]); return <div className="min-h-[50vh]" />; }
-function App() { return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><ErrorBoundary><Router /></ErrorBoundary></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>; }
+/* ────────────────────────────────────────────────────────────
+   ROUTER
+   ──────────────────────────────────────────────────────────── */
+function Router() {
+  return (
+    <Shell>
+      <Switch>
+        <Route path="/"            component={OverviewRedirect} />
+        <Route path="/overview"    component={OverviewPage} />
+        <Route path="/analysis"    component={AnalysisPage} />
+        <Route path="/timing"      component={TimingPage} />
+        <Route path="/protocol"    component={ProtocolPage} />
+        <Route path="/findings"    component={FindingsPage} />
+        <Route path="/patches"     component={() => <PatchesPage />} />
+        <Route path="/verification" component={() => <PatchesPage verification />} />
+        <Route path="/reports"     component={ReportsPage} />
+        <Route                     component={NotFound} />
+      </Switch>
+    </Shell>
+  );
+}
+
+function OverviewRedirect() {
+  const [, setLocation] = useLocation();
+  useEffect(() => setLocation('/overview'), [setLocation]);
+  return <div style={{ minHeight: '50vh' }} />;
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+          <ErrorBoundary>
+            <Router />
+          </ErrorBoundary>
+        </WouterRouter>
+        <Toaster />
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
+
 export default App;
