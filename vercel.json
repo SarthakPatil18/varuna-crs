@@ -1,0 +1,8 @@
+{
+  "buildCommand": "PORT=3000 BASE_PATH=/ pnpm --filter @workspace/varuna-console run build",
+  "outputDirectory": "artifacts/varuna-console/dist/public",
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
